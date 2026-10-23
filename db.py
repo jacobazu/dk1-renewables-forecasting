@@ -1,0 +1,69 @@
+import time
+from pathlib import Path
+
+import duckdb
+import pandas as pd
+import requests
+
+START = pd.Timestamp("2024-03-01")
+TODAY = pd.Timestamp.today().floor("D")
+
+TABLES = {
+    "production": "time TIMESTAMP PRIMARY KEY, onshore DOUBLE, offshore DOUBLE, solar DOUBLE",
+    "energinet": "time TIMESTAMP PRIMARY KEY, onshore DOUBLE, offshore DOUBLE, solar DOUBLE",
+    "weather": "time TIMESTAMP, point VARCHAR, wind_100m DOUBLE, direction_100m DOUBLE, wind_10m DOUBLE, "
+               "temperature DOUBLE, radiation DOUBLE, cloud_cover DOUBLE, PRIMARY KEY (time, point)",
+}
+
+POINTS = {
+    "horns_rev": (55.60, 7.80),
+    "thor": (56.35, 7.75),
+    "anholt": (56.60, 11.20),
+    "west_jutland": (56.10, 8.30),
+    "north_jutland": (57.05, 9.30),
+    "mid_jutland": (56.20, 9.50),
+    "south_jutland": (55.20, 9.20),
+    "east_jutland": (56.30, 10.30),
+    "funen": (55.30, 10.30),
+}
+
+
+def connect():
+    Path("data").mkdir(exist_ok=True)
+    con = duckdb.connect("data/dk1.duckdb")
+    for name, cols in TABLES.items():
+        con.execute(f"CREATE TABLE IF NOT EXISTS {name} ({cols})")
+    return con
+
+
+def save(con, table, df):
+    con.register("df", df)
+    con.execute(f"INSERT OR REPLACE INTO {table} BY NAME SELECT * FROM df")
+    con.unregister("df")
+
+
+def start_from(con, table, days_back, where=""):
+    # first run: everything. after that only the last few days
+    last = con.execute(f"SELECT max(time) FROM {table} {where}").fetchall()[0][0]
+    return START if last is None else pd.Timestamp(last).floor("D") - pd.Timedelta(days=days_back)
+
+
+def get(url, params):
+    # open-meteo allows 600 calls a minute and 5,000 an hour, so a long download waits when it hits the limit
+    for _ in range(150):
+        try:
+            r = requests.get(url, params=params, timeout=300)
+        except requests.ConnectionError:
+            time.sleep(30)
+            continue
+        if r.status_code == 429:
+            time.sleep(60)
+            continue
+        if r.status_code == 400:
+            raise RuntimeError(r.text)
+        r.raise_for_status()
+        try:
+            return r.json()
+        except ValueError:  # an empty or cut-off answer, try again
+            time.sleep(30)
+    raise RuntimeError(f"no answer from {url}")
