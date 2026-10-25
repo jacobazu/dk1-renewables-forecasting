@@ -1,0 +1,13 @@
+target,model,mae_mw,mae_share_of_fleet,bias_mw,hours
+onshore,power curve,240.3609,0.0759,-13.9485,13969
+onshore,lightgbm,225.5633,0.0712,-20.7834,13969
+onshore,average,223.4489,0.0705,-17.3659,13969
+onshore,energinet,191.6277,0.0605,-119.9269,13969
+offshore,power curve,216.7572,0.1274,-12.248,13921
+offshore,lightgbm,190.4621,0.112,-19.3657,13921
+offshore,average,193.2632,0.1136,-15.8068,13921
+offshore,energinet,304.0924,0.1788,-206.3147,13921
+solar,power curve,190.4275,0.0796,35.778,14017
+solar,lightgbm,116.0297,0.0485,-2.3856,14017
+solar,average,140.971,0.0589,16.6962,14017
+solar,energinet,101.127,0.0423,-17.5442,14017

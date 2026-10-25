@@ -1,0 +1,4 @@
+target,days,mean_gain_mw,t,p_one_sided
+onshore,583,15.1341,3.3786,0.0004
+offshore,581,26.2887,5.731,0.0
+solar,585,74.3084,15.0094,0.0
