@@ -13,6 +13,11 @@ TABLES = {
     "energinet": "time TIMESTAMP PRIMARY KEY, onshore DOUBLE, offshore DOUBLE, solar DOUBLE",
     "weather": "time TIMESTAMP, point VARCHAR, wind_100m DOUBLE, direction_100m DOUBLE, wind_10m DOUBLE, "
                "temperature DOUBLE, radiation DOUBLE, cloud_cover DOUBLE, PRIMARY KEY (time, point)",
+    "weather_runs": "run TIMESTAMP, time TIMESTAMP, point VARCHAR, wind_100m DOUBLE, direction_100m DOUBLE, "
+                    "wind_10m DOUBLE, gusts DOUBLE, temperature DOUBLE, radiation DOUBLE, direct_radiation DOUBLE, "
+                    "cloud_cover DOUBLE, PRIMARY KEY (run, time, point)",
+    "weather_models": "time TIMESTAMP, point VARCHAR, model VARCHAR, wind_100m DOUBLE, direction_100m DOUBLE, "
+                      "radiation DOUBLE, cloud_cover DOUBLE, PRIMARY KEY (time, point, model)",
 }
 
 POINTS = {
