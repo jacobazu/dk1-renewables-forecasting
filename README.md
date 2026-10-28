@@ -18,6 +18,19 @@ How close can a forecast of DK1 wind and solar power, made before the noon day-a
 - **Worth it:** LightGBM is worth it if its daily mean absolute error is lower than the power curve's, Diebold-Mariano with Newey-West, p < 0.05.
 - **Energinet:** its day-ahead forecast is reported but isn't pass/fail. It uses later weather, and it doesn't seem to cover all of DK1's offshore fleet.
 
+## Trying to beat Energinet, set 21 Oct 2026 before trying
+
+The first backtest beat Energinet on offshore but not on onshore or solar. To improve without fishing for a lucky result:
+
+- **Two periods.** March to December 2025 is for trying things. January 2026 to the latest settled day is not looked at until the end, and the final model is run on it once. (The first backtest above already covered 2026, but only with the first model.)
+- **What is tried, one at a time, each kept only if it lowers the error on 2025:**
+  1. Fresher weather: ECMWF's 00 UTC run from the day before (ready around 07 UTC), instead of a forecast made two days before.
+  2. More weather models as extra inputs: DWD ICON-EU, DMI HARMONIE, MET Norway Nordic and NOAA GFS.
+  3. More features: the spread of wind speed over the points, gusts, and for solar the sun's height and direct radiation.
+  4. LightGBM settings, chosen on 2025 only.
+- **Kept or not:** an addition is kept for a target if it lowers that target's mean absolute error on 2025.
+- **Compared with Energinet on 2026:** as published, and scaled to the whole fleet with the ratio of output to its forecast over the 60 days up to 10 days before. A target counts as beaten if the mean absolute error is lower than both, and the daily errors pass Diebold-Mariano with Newey-West, p < 0.05.
+
 ## License
 
 Code: [MIT](LICENSE). Data from [Energi Data Service](https://www.energidataservice.dk) (Energinet) and [Open-Meteo.com](https://open-meteo.com) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
