@@ -1,0 +1,22 @@
+target,try,mae,kept
+onshore,start,217.77,True
+onshore,ecmwf 00 utc run,192.99,True
+onshore,other models,181.38,True
+onshore,more features,181.74,False
+onshore,fewer leaves,182.8,False
+onshore,more leaves,181.24,True
+onshore,slower,182.46,False
+offshore,start,179.6,True
+offshore,ecmwf 00 utc run,165.35,True
+offshore,other models,155.65,True
+offshore,more features,153.82,True
+offshore,fewer leaves,154.46,False
+offshore,more leaves,154.42,False
+offshore,slower,152.88,True
+solar,start,102.05,True
+solar,ecmwf 00 utc run,98.85,True
+solar,other models,94.25,True
+solar,more features,94.66,False
+solar,fewer leaves,94.83,False
+solar,more leaves,94.45,False
+solar,slower,93.09,True

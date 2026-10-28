@@ -1,0 +1,42 @@
+onshore start: 217.8
+onshore ecmwf 00 utc run: 193.0 kept
+onshore other models: 181.4 kept
+onshore more features: 181.7 
+onshore fewer leaves: 182.8 
+onshore more leaves: 181.2 kept
+onshore slower: 182.5 
+offshore start: 179.6
+offshore ecmwf 00 utc run: 165.3 kept
+offshore other models: 155.6 kept
+offshore more features: 153.8 kept
+offshore fewer leaves: 154.5 
+offshore more leaves: 154.4 
+offshore slower: 152.9 kept
+solar start: 102.0
+solar ecmwf 00 utc run: 98.8 kept
+solar other models: 94.2 kept
+solar more features: 94.7 
+solar fewer leaves: 94.8 
+solar more leaves: 94.4 
+solar slower: 93.1 kept
+{
+  "onshore": {
+    "weather": "ecmwf",
+    "models": true,
+    "extras": false,
+    "params": "more leaves"
+  },
+  "offshore": {
+    "weather": "ecmwf",
+    "models": true,
+    "extras": true,
+    "params": "slower"
+  },
+  "solar": {
+    "weather": "ecmwf",
+    "models": true,
+    "extras": false,
+    "params": "slower"
+  }
+}
+exit 0

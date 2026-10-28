@@ -25,7 +25,7 @@ The first backtest beat Energinet on offshore but not on onshore or solar. To im
 - **Two periods.** March to December 2025 is for trying things. January 2026 to the latest settled day is not looked at until the end, and the final model is run on it once. (The first backtest above already covered 2026, but only with the first model.)
 - **What is tried, one at a time, each kept only if it lowers the error on 2025:**
   1. Fresher weather: ECMWF's 00 UTC run from the day before (ready around 07 UTC), instead of a forecast made two days before.
-  2. More weather models as extra inputs: DWD ICON-EU, DMI HARMONIE, MET Norway Nordic and NOAA GFS.
+  2. More weather models as extra inputs: DWD ICON-EU, DMI HARMONIE, MET Norway Nordic and NOAA GFS. (Open-Meteo has no archived forecasts from two days before for DMI HARMONIE or MET Nordic, so only ICON-EU and GFS were used.)
   3. More features: the spread of wind speed over the points, gusts, and for solar the sun's height and direct radiation.
   4. LightGBM settings, chosen on 2025 only.
 - **Kept or not:** an addition is kept for a target if it lowers that target's mean absolute error on 2025.
