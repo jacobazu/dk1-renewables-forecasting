@@ -1,5 +1,6 @@
 # trying to beat energinet, by the rules in the readme
 #   python improve.py        tries each addition on march-december 2025 and saves what is kept
+#   python improve.py final  runs the kept model once on 2026 and compares it with energinet
 
 import json
 import sys
@@ -9,11 +10,13 @@ import duckdb
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 
 TARGETS = ["onshore", "offshore", "solar"]
 LAND = ["west_jutland", "north_jutland", "mid_jutland", "south_jutland", "east_jutland", "funen"]
 SEA = ["horns_rev", "thor", "anholt"]
 TUNE = pd.date_range("2025-03-01", "2025-12-01", freq="MS")
+FINAL_START = pd.Timestamp("2026-01-01")
 DELAY = 10
 PARAMS = dict(objective="l1", n_estimators=600, learning_rate=0.05, num_leaves=31, min_child_samples=50,
               subsample=0.8, subsample_freq=1, colsample_bytree=0.8, verbose=-1, random_state=1)
@@ -120,6 +123,14 @@ def mae(f):
     return (f["forecast"] - f["actual"]).abs().mean()
 
 
+def dm(ours, other, actual, dates):
+    # one-sided: are our daily errors lower
+    diff = ((other - actual).abs() - (ours - actual).abs()).groupby(dates).mean()
+    fit = sm.OLS(diff.values, np.ones(len(diff))).fit(cov_type="HAC", cov_kwds={"maxlags": 7})
+    t = fit.tvalues[0]
+    return fit.pvalues[0] / 2 if t > 0 else 1 - fit.pvalues[0] / 2
+
+
 if len(sys.argv) == 1:
     log, chosen = [], {}
     for t in TARGETS:
@@ -140,3 +151,28 @@ if len(sys.argv) == 1:
     pd.DataFrame(log).round(2).to_csv("results/improve_tuning.csv", index=False)
     Path("results/improve_choice.json").write_text(json.dumps(chosen, indent=2))
     print(json.dumps(chosen, indent=2))
+
+elif sys.argv[1] == "final":
+    if Path("results/final_scores.csv").exists() and "again" not in sys.argv:
+        sys.exit("the final run is done once. results/final_scores.csv has it")
+    chosen = json.loads(Path("results/improve_choice.json").read_text())
+    rows, forecasts = [], []
+    for t in TARGETS:
+        f = backtest(t, chosen[t], pd.date_range(FINAL_START, X["date"].max(), freq="MS"))
+        f["energinet"] = energinet[t].reindex(f.index)
+        both = pd.concat([prod[t].rename("actual"), energinet[t].rename("energinet")], axis=1, sort=True).dropna()
+        daily = both.groupby(local_date(both.index)).sum()
+        ratio = (daily["actual"].rolling("60D").sum() / daily["energinet"].rolling("60D").sum()).shift(DELAY, freq="D")
+        f["energinet_scaled"] = f["energinet"] * f["date"].map(ratio)
+        f = f.dropna()
+        row = {"target": t, "hours": len(f), "ours": mae(f), "energinet": (f["energinet"] - f["actual"]).abs().mean(),
+               "energinet_scaled": (f["energinet_scaled"] - f["actual"]).abs().mean(),
+               "p_vs_energinet": dm(f["forecast"], f["energinet"], f["actual"], f["date"]),
+               "p_vs_scaled": dm(f["forecast"], f["energinet_scaled"], f["actual"], f["date"])}
+        row["beaten"] = bool(row["ours"] < min(row["energinet"], row["energinet_scaled"])
+                             and max(row["p_vs_energinet"], row["p_vs_scaled"]) < 0.05)
+        rows.append(row)
+        forecasts.append(f.assign(target=t))
+    pd.concat(forecasts).drop(columns="date").round(1).to_csv("results/final_forecasts.csv", index_label="time")
+    pd.DataFrame(rows).round(4).to_csv("results/final_scores.csv", index=False)
+    print(pd.DataFrame(rows).round(3).to_string(index=False))
