@@ -31,6 +31,20 @@ The first backtest beat Energinet on offshore but not on onshore or solar. To im
 - **Kept or not:** an addition is kept for a target if it lowers that target's mean absolute error on 2025.
 - **Compared with Energinet on 2026:** as published, and scaled to the whole fleet with the ratio of output to its forecast over the 60 days up to 10 days before. A target counts as beaten if the mean absolute error is lower than both, and the daily errors pass Diebold-Mariano with Newey-West, p < 0.05.
 
+## Result on 2026, run once on 22 Oct 2026
+
+January to 11 October 2026, mean absolute error in MW. Kept on 2025: ECMWF's fresher run and ICON-EU and GFS as extra inputs for all three, plus the extra features for offshore.
+
+| | Ours | Energinet | Energinet scaled to the fleet | Beaten |
+|---|---|---|---|---|
+| Onshore | 180 | 194 | 154 | no |
+| Offshore | 170 | 360 | 210 | yes, p < 0.001 against both |
+| Solar | 120 | 97 | 94 | no |
+
+- **Offshore:** clearly better, every month of 2026. Energinet's forecast seems to miss part of the fleet, and even scaled up it is 20% behind.
+- **Onshore:** lower than Energinet's published forecast but not significantly (p = 0.06), and 17% behind it scaled up. Energinet knows every wind farm and forecasts later.
+- **Solar:** behind. Most of the gap is in spring and summer. The fleet size (the highest hour in the last 60 days) follows the season for solar, not only new panels, so it lags in spring. A fleet measure over a whole year would suit solar better. That is for a later round, scored on new days.
+
 ## License
 
 Code: [MIT](LICENSE). Data from [Energi Data Service](https://www.energidataservice.dk) (Energinet) and [Open-Meteo.com](https://open-meteo.com) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
