@@ -81,6 +81,18 @@ clear = np.where(sin_h > 0.05, 1098 * sin_h * np.exp(-0.057 / np.clip(sin_h, 0.0
 for p in ["", "ec_"]:
     X[f"{p}clear_sky"] = np.clip(X[f"{p}sun"] / clear, 0, 1.5)
 
+# for solar: where the sun is, and the radiation on a panel tilted 35 degrees to the south
+cos_az = (np.sin(decl) - sin_h * np.sin(lat)) / (np.sqrt(1 - sin_h ** 2) * np.cos(lat))
+azimuth = np.degrees(np.arccos(np.clip(cos_az, -1, 1)))
+X["sun_azimuth"] = np.where(angle > 0, 360 - azimuth, azimuth)
+X["ec_direct"] = X[[f"ec_direct_radiation_{p}" for p in LAND]].mean(axis=1)
+X["ec_diffuse"] = (X["ec_sun"] - X["ec_direct"]).clip(lower=0)
+tilt = np.radians(35)
+cos_in = sin_h * np.cos(tilt) + np.sqrt(1 - sin_h ** 2) * np.sin(tilt) * np.cos(np.radians(X["sun_azimuth"] - 180))
+beam = np.where(sin_h > 0.05, (X["ec_direct"] / np.clip(sin_h, 0.05, None)).clip(upper=1100), 0)
+X["ec_panel"] = beam * np.clip(cos_in, 0, None) + X["ec_diffuse"] * (1 + np.cos(tilt)) / 2
+SOLAR = ["sun_height", "sun_azimuth", "ec_clear_sky", "ec_direct", "ec_diffuse", "ec_panel"]
+
 CALENDAR = ["hour", "day_of_year"]
 
 
@@ -91,16 +103,18 @@ def columns(cfg):
         cols += [p + "clear_sky", "sun_height"]
     if cfg["models"]:
         cols += list(M.columns)
+    if cfg.get("solar"):
+        cols += [c for c in SOLAR if c not in cols]
     return cols + CALENDAR
 
 
-def fleet(y):
+def fleet(y, days=60):
     daily = y.groupby(local_date(y.index)).max()
-    return daily.rolling("60D").max().shift(DELAY, freq="D")
+    return daily.rolling(f"{days}D").max().shift(DELAY, freq="D")
 
 
 def backtest(t, cfg, months):
-    cap = fleet(prod[t])
+    cap = fleet(prod[t], cfg.get("fleet_days", 60))
     d = X.join(prod[t].rename("actual"), how="inner")
     d["cap"] = d["date"].map(cap)
     d = d.dropna(subset=["actual", "cap", "wind_land"])
@@ -131,7 +145,8 @@ def dm(ours, other, actual, dates):
     return fit.pvalues[0] / 2 if t > 0 else 1 - fit.pvalues[0] / 2
 
 
-if len(sys.argv) == 1:
+RUN = __name__ == "__main__"
+if RUN and len(sys.argv) == 1:
     log, chosen = [], {}
     for t in TARGETS:
         cfg = {"weather": "base", "models": False, "extras": False, "params": "base"}
@@ -152,7 +167,7 @@ if len(sys.argv) == 1:
     Path("results/improve_choice.json").write_text(json.dumps(chosen, indent=2))
     print(json.dumps(chosen, indent=2))
 
-elif sys.argv[1] == "final":
+elif RUN and sys.argv[1] == "final":
     if Path("results/final_scores.csv").exists() and "again" not in sys.argv:
         sys.exit("the final run is done once. results/final_scores.csv has it")
     chosen = json.loads(Path("results/improve_choice.json").read_text())
