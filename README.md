@@ -45,6 +45,13 @@ January to 11 October 2026, mean absolute error in MW. Kept on 2025: ECMWF's fre
 - **Onshore:** lower than Energinet's published forecast but not significantly (p = 0.06), and 17% behind it scaled up. Energinet knows every wind farm and forecasts later.
 - **Solar:** behind. Most of the gap is in spring and summer. The fleet size (the highest hour in the last 60 days) follows the season for solar, not only new panels, so it lags in spring. A fleet measure over a whole year would suit solar better. That is for a later round, scored on new days.
 
+## Round 2 for solar, set 22 Oct 2026 before trying
+
+2026 has been used, so it can't judge a new solar model. Instead:
+
+- **Tried on March to December 2025, one at a time, kept if the error there drops:** fleet size as the highest hour in the past year instead of 60 days; the sun's height and direction, ECMWF's direct and diffuse radiation, and the radiation on a panel tilted 35 degrees to the south; and leaving out the other weather models.
+- **Verdict from live days:** the chosen model forecasts every day before the auction from when the daily run starts. It is judged on 1 April to 30 June 2027 against Energinet as published and scaled, with the same rule as above: lower error than both, Diebold-Mariano p < 0.05.
+
 ## License
 
 Code: [MIT](LICENSE). Data from [Energi Data Service](https://www.energidataservice.dk) (Energinet) and [Open-Meteo.com](https://open-meteo.com) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
