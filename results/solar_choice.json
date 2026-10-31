@@ -1,0 +1,8 @@
+{
+  "weather": "ecmwf",
+  "models": true,
+  "extras": false,
+  "params": "slower",
+  "fleet_days": 365,
+  "solar": true
+}
