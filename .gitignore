@@ -220,3 +220,6 @@ __marimo__/
 .streamlit/secrets.toml
 
 data/
+
+# built by dashboard.py, published by the workflow
+docs/

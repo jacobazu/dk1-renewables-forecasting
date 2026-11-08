@@ -1,0 +1,93 @@
+# every morning: download what is new, forecast tomorrow before the noon auction, rebuild the dashboard.
+# the evening run only refreshes the data (energinet's forecast, settled output) and the dashboard
+
+name: Live forecast
+
+on:
+  schedule:
+    - cron: "7 9 * * *"     # 10:07 danish winter time, 11:07 summer
+    - cron: "37 9 * * *"    # second try if today's ecmwf run wasn't in the archive yet
+    - cron: "7 17 * * *"    # evening refresh
+  workflow_dispatch:        # the outside scheduler (cron-job.org), or by hand
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: live
+  cancel-in-progress: false
+
+jobs:
+  forecast:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      # the duckdb file lives in the actions cache. if it is gone, the downloads start from march 2024
+      # (a few hours, open-meteo's hourly limit) and carry on where they stopped on the next run
+      - name: Restore data
+        uses: actions/cache/restore@v4
+        with:
+          path: data
+          key: data-${{ github.run_id }}
+          restore-keys: data-
+
+      - name: Download
+        timeout-minutes: 240
+        run: |
+          python get_data.py
+          python get_weather.py
+          python get_weather_models.py
+          python get_weather_runs.py
+
+      - name: Save data
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data
+          key: data-${{ github.run_id }}
+
+      # exits without a forecast after noon, when tomorrow is already saved, or when the weather isn't complete
+      - name: Forecast tomorrow
+        run: python live.py
+
+      - name: Dashboard
+        run: python dashboard.py
+
+      - name: Commit the forecast
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add forecasts
+          git commit -m "Forecast made $(date -u '+%F %H:%M') UTC" || echo "Nothing new to commit"
+          for try in 1 2 3; do
+            if git pull --rebase origin main && git push; then exit 0; fi
+            git rebase --abort 2>/dev/null || true
+            sleep 20
+          done
+          exit 1
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: forecast
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
