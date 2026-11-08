@@ -1,0 +1,341 @@
+# dashboard: docs/index.html (live forecasts and their track record) and docs/backtest.html (2026, run once)
+#   python dashboard.py
+
+from datetime import datetime, timezone
+from pathlib import Path
+
+import duckdb
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+
+ORANGE, GREEN, BLUE, RED = "#f97316", "#16a34a", "#0ea5e9", "#dc2626"
+INK, GREY, LINE, GRID, BEIGE = "#1f2328", "#6b7280", "#e5ddd3", "#f1ebe4", "#cfc6bb"
+FONT = "IBM Plex Sans, Segoe UI, Helvetica Neue, Arial, sans-serif"
+PLOTLY_JS = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@4.1.1/plotly.min.js"
+TARGETS = {"offshore": "Offshore wind", "onshore": "Onshore wind", "solar": "Solar"}
+DELAY = 10
+GITHUB_ICON = ('<svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 '
+               '3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94'
+               '-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78'
+               '-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27'
+               's1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 '
+               '3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/>'
+               '</svg>')
+
+
+def local(t):
+    return pd.DatetimeIndex(t).tz_localize("UTC").tz_convert("Europe/Copenhagen")
+
+
+def mw(x):
+    return f"{x:,.0f} MW"
+
+
+def style(fig, height, legend_y=-0.18):
+    fig.update_layout(
+        height=height, margin=dict(l=10, r=10, t=10, b=10), font=dict(family=FONT, color=GREY, size=12),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified",
+        legend=dict(orientation="h", x=0, y=legend_y, font=dict(color=INK)),
+        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#efe6dc", font=dict(color=INK, family=FONT)))
+    fig.update_xaxes(showgrid=False, zeroline=False, linecolor=LINE, color=GREY)
+    fig.update_yaxes(gridcolor=GRID, zerolinecolor=BEIGE, color=GREY)
+    return fig.to_html(full_html=False, include_plotlyjs=False, config=dict(displayModeBar=False, responsive=True))
+
+
+def kpi(label, value, sub, accent):
+    return (f"<div class='card kpi' style='--accent:{accent}'><div class='kpi-label'>{label}</div>"
+            f"<div class='kpi-value'>{value}</div><div class='kpi-sub'>{sub}</div></div>")
+
+
+def card(title, body, note=""):
+    return f"<div class='card'><div class='card-title'>{title}</div>{body}{note and f'<p class=note>{note}</p>'}</div>"
+
+
+def scaled(energinet, actual):
+    """energinet's forecast scaled to the whole fleet: output over its forecast in the 60 days up to 10 days before"""
+    both = pd.concat([actual.rename("a"), energinet.rename("e")], axis=1).dropna()
+    daily = both.groupby(local(both.index).date).sum()
+    daily.index = pd.to_datetime(daily.index)
+    ratio = (daily["a"].rolling("60D").sum() / daily["e"].rolling("60D").sum()).shift(DELAY, freq="D")
+    ratio = ratio.reindex(pd.date_range(ratio.index.min(), ratio.index.max() + pd.Timedelta(days=DELAY))).ffill()
+    days = pd.to_datetime(local(energinet.index).date)
+    return energinet * ratio.reindex(days).to_numpy()
+
+
+# --- charts shared by both pages ---------------------------------------------------------------------------
+
+def trend_chart(f, window):
+    """rolling mean absolute error by day: is the gap to energinet steady or changing"""
+    d = f.assign(day=pd.to_datetime(local(f.index).date))
+    err = pd.DataFrame({k: (d[k] - d["actual"]).abs() for k in ["forecast", "energinet", "energinet_scaled"]})
+    daily = err.groupby(d["day"]).mean().rolling(window, min_periods=max(1, window // 2)).mean()
+    fig = go.Figure()
+    for k, name, color, dash in [("energinet", "Energinet, as published", GREY, "dot"),
+                                 ("energinet_scaled", "Energinet, scaled to the fleet", GREY, "solid"),
+                                 ("forecast", "Ours", ORANGE, "solid")]:
+        fig.add_trace(go.Scatter(x=daily.index, y=daily[k], name=name, mode="lines",
+                                 line=dict(color=color, width=2.5 if k == "forecast" else 1.6, dash=dash),
+                                 hovertemplate=f"{name}: %{{y:,.0f}} MW<extra></extra>"))
+    fig.update_yaxes(ticksuffix=" MW", rangemode="tozero")
+    return style(fig, 320)
+
+
+def scatter_chart(f, cap):
+    """forecast against what was produced, hour by hour: on the diagonal is a perfect forecast"""
+    s = f.sample(min(len(f), 2500), random_state=1).sort_index()
+    top = max(f["actual"].max(), f["forecast"].max(), f["energinet"].max()) * 1.03
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=[0, top], y=[0, top], mode="lines", line=dict(color=BEIGE, dash="dash"),
+                             hoverinfo="skip", showlegend=False))
+    for k, name, color in [("energinet", "Energinet, as published", GREY), ("forecast", "Ours", ORANGE)]:
+        fig.add_trace(go.Scatter(x=s[k], y=s["actual"], name=name, mode="markers",
+                                 marker=dict(color=color, size=4, opacity=0.35),
+                                 hovertemplate=f"{name} %{{x:,.0f}} MW, produced %{{y:,.0f}} MW<extra></extra>"))
+    fig.update_layout(hovermode="closest")
+    fig.update_xaxes(title="forecast, MW", range=[0, top])
+    fig.update_yaxes(title="produced, MW", range=[0, top])
+    return style(fig, 360, -0.32)
+
+
+def level_chart(f):
+    """error by how much was forecast, as a share of the fleet: where on the power curve the misses are"""
+    share = (f["forecast"] / f["cap"]).clip(0, 0.999)
+    bins = (share * 10).astype(int) * 10
+    err = pd.DataFrame({k: (f[k] - f["actual"]).abs() for k in ["forecast", "energinet_scaled"]})
+    g = err.groupby(bins).mean()
+    n = bins.value_counts().reindex(g.index)
+    labels = [f"{b}-{b + 10}%" for b in g.index]
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=labels, y=g["energinet_scaled"], name="Energinet, scaled to the fleet",
+                         marker=dict(color=BEIGE, cornerradius=4), customdata=n,
+                         hovertemplate="%{x}: %{y:,.0f} MW (%{customdata} hours)<extra></extra>"))
+    fig.add_trace(go.Bar(x=labels, y=g["forecast"], name="Ours", marker=dict(color=ORANGE, cornerradius=4),
+                         customdata=n, hovertemplate="%{x}: %{y:,.0f} MW (%{customdata} hours)<extra></extra>"))
+    fig.update_layout(barmode="group", hovermode="closest")
+    fig.update_xaxes(title="our forecast as a share of the fleet", tickangle=0)
+    fig.update_yaxes(ticksuffix=" MW")
+    return style(fig, 300, -0.32)
+
+
+def hour_chart(f):
+    """error by hour of the day, danish time"""
+    h = local(f.index).hour
+    g = pd.DataFrame({k: (f[k] - f["actual"]).abs() for k in ["forecast", "energinet_scaled"]}).groupby(h).mean()
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=g.index, y=g["energinet_scaled"], name="Energinet, scaled to the fleet",
+                             line=dict(color=GREY, width=1.6), hovertemplate="%{y:,.0f} MW<extra></extra>"))
+    fig.add_trace(go.Scatter(x=g.index, y=g["forecast"], name="Ours", line=dict(color=ORANGE, width=2.5),
+                             hovertemplate="%{y:,.0f} MW<extra></extra>"))
+    fig.update_xaxes(title="hour, Danish time", dtick=3)
+    fig.update_yaxes(ticksuffix=" MW", rangemode="tozero")
+    return style(fig, 280, -0.32)
+
+
+def gap(ours, other):
+    d = 1 - ours / other
+    return f"ours is {abs(d):.0%} {'lower' if d >= 0 else 'higher'}"
+
+
+def scores(f):
+    e = lambda k: (f[k] - f["actual"]).abs().mean()
+    return e("forecast"), e("energinet"), e("energinet_scaled")
+
+
+# --- live page ---------------------------------------------------------------------------------------------
+
+log = pd.read_csv("forecasts/live_forecasts.csv", parse_dates=["date", "time"]) \
+    if Path("forecasts/live_forecasts.csv").exists() else pd.DataFrame(columns=["date", "time", "target", "forecast"])
+prod = energinet = None
+if Path("data/dk1.duckdb").exists():
+    con = duckdb.connect("data/dk1.duckdb", read_only=True)
+    prod = con.execute("SELECT * FROM production ORDER BY time").df().set_index("time")
+    energinet = con.execute("SELECT * FROM energinet ORDER BY time").df().set_index("time")
+    con.close()
+
+live_tabs = {}
+latest = log["date"].max() if len(log) else None
+for t, name in TARGETS.items():
+    lt = log[log["target"] == t].set_index("time").sort_index()
+    blocks = []
+    if latest is not None:
+        day = lt[lt["date"] == latest]
+        fig = go.Figure()
+        if energinet is not None and energinet[t].reindex(day.index).notna().any():
+            fig.add_trace(go.Scatter(x=local(day.index), y=energinet[t].reindex(day.index), name="Energinet, as published",
+                                     line=dict(color=GREY, width=1.6, dash="dot", shape="hv"),
+                                     hovertemplate="Energinet %{y:,.0f} MW<extra></extra>"))
+        fig.add_trace(go.Scatter(x=local(day.index), y=day["forecast"], name="Ours", line=dict(color=ORANGE, width=2.5,
+                                 shape="hv"), fill="tozeroy", fillcolor="rgba(249,115,22,.08)",
+                                 hovertemplate="Ours %{y:,.0f} MW<extra></extra>"))
+        fig.update_yaxes(ticksuffix=" MW", rangemode="tozero")
+        made = pd.Timestamp(day["issued"].iloc[0]).tz_localize("UTC").tz_convert("Europe/Copenhagen")
+        blocks.append("<div class='kpis'>" +
+                      kpi(f"{name}, {latest:%a %d %b}", mw(day["forecast"].mean()), "average over the day", ORANGE) +
+                      kpi("Highest hour", mw(day["forecast"].max()),
+                          f"at {local(day.index)[day['forecast'].to_numpy().argmax()]:%H:%M}", ORANGE) +
+                      kpi("Fleet size used", mw(day["cap"].iloc[0]), "highest hour in the period before", GREY) +
+                      "</div>")
+        blocks.append(card(f"Forecast for {latest:%A %d %B}, made {made:%d %b %H:%M} (Danish time)", style(fig, 320),
+                           "Made before the noon day-ahead auction. Energinet's forecast is added when it is published, "
+                           "after the auction."))
+    # track record: settled output comes 8-10 days late
+    done = pd.DataFrame()
+    if prod is not None and len(lt):
+        done = lt[["forecast", "cap"]].join(prod[t].rename("actual"), how="inner")
+        done["energinet"] = energinet[t].reindex(done.index)
+        done["energinet_scaled"] = scaled(energinet[t], prod[t]).reindex(done.index)
+        done = done.dropna()
+    if len(done) >= 24:
+        ours, en, ens = scores(done)
+        n = len(done.index.normalize().unique())
+        blocks.append("<div class='kpis'>" +
+                      kpi("Our error since launch", mw(ours), f"mean absolute error, {n} settled days", ORANGE) +
+                      kpi("Energinet, as published", mw(en), gap(ours, en), GREY) +
+                      kpi("Energinet, scaled to the fleet", mw(ens), gap(ours, ens),
+                          GREY) + "</div>")
+        blocks.append(card("Error by day, 7-day average", trend_chart(done, 7)))
+        blocks.append(card("Forecast against what was produced, every live hour", scatter_chart(done, done["cap"]),
+                           "On the dashed line the forecast was exactly right. Points above it: more was produced "
+                           "than forecast."))
+    else:
+        blocks.append(card("Track record", "<p>Energinet's settled production comes 8 to 10 days late, so the first "
+                                           "live scores show up about ten days after launch. Until then the "
+                                           "<a href='backtest.html'>backtest</a> shows how the model did on 2026.</p>"))
+    live_tabs[name] = "".join(blocks)
+
+
+# --- backtest page: 2026, run once -------------------------------------------------------------------------
+
+bt = pd.read_csv("results/final_forecasts.csv", parse_dates=["time"]).set_index("time")
+fs = pd.read_csv("results/final_scores.csv").set_index("target")
+SOLAR_NOTE = (" The live forecast uses a second solar model, chosen on 2025 only (fleet size over a year, the sun's "
+              "position and the radiation on a tilted panel). It is judged on live days, 1 April to 30 June 2027.")
+bt_tabs = {}
+for t, name in TARGETS.items():
+    f = bt[bt["target"] == t]
+    ours, en, ens = scores(f)
+    r = fs.loc[t]
+    verdict = ("Beaten: lower error than both, Diebold-Mariano p < 0.05" if r["beaten"] else
+               f"Not beaten (p = {r['p_vs_energinet']:.2f} against the published forecast, "
+               f"{r['p_vs_scaled']:.2f} against the scaled one)")
+    month = f.groupby(local(f.index).strftime("%Y-%m")).apply(
+        lambda g: pd.Series({k: (g[k] - g["actual"]).abs().mean() for k in ["forecast", "energinet_scaled"]}))
+    figm = go.Figure()
+    figm.add_trace(go.Bar(x=pd.to_datetime(month.index).strftime("%b"), y=month["energinet_scaled"],
+                          name="Energinet, scaled to the fleet", marker=dict(color=BEIGE, cornerradius=4),
+                          hovertemplate="%{y:,.0f} MW<extra></extra>"))
+    figm.add_trace(go.Bar(x=pd.to_datetime(month.index).strftime("%b"), y=month["forecast"], name="Ours",
+                          marker=dict(color=ORANGE, cornerradius=4), hovertemplate="%{y:,.0f} MW<extra></extra>"))
+    figm.update_layout(barmode="group")
+    figm.update_yaxes(ticksuffix=" MW")
+    bt_tabs[name] = (
+        "<div class='kpis'>" +
+        kpi("Our error", mw(ours), "mean absolute error per hour", ORANGE) +
+        kpi("Energinet, as published", mw(en), gap(ours, en), GREY) +
+        kpi("Energinet, scaled to the fleet", mw(ens), gap(ours, ens), GREY) +
+        "</div>" +
+        card("Verdict", f"<p>{verdict}.{SOLAR_NOTE if t == 'solar' else ''}</p>") +
+        card("Is the gap steady? Error by day, 14-day average", trend_chart(f, 14),
+             "Energinet's published forecast seems to miss part of the fleet; scaled up, it is what a trader could "
+             "get by correcting it with the last 60 settled days.") +
+        "<div class='grid2'>" +
+        card("Forecast against what was produced (2,500 random hours)", scatter_chart(f, f["cap"]),
+             "On the dashed line the forecast was exactly right.") +
+        card("Where on the power curve the misses are", level_chart(f),
+             "Error by how much we forecast, as a share of the fleet.") +
+        "</div><div class='grid2'>" +
+        card("Error by month", style(figm, 300)) +
+        card("Error by hour of the day", hour_chart(f)) +
+        "</div>")
+
+
+# --- page ---------------------------------------------------------------------------------------------------
+
+def render(title, tabs, link, banner=""):
+    built = datetime.now(timezone.utc)
+    nav = "".join(f"<button data-tab='t{i}'{' class=active' if i == 0 else ''}>{k}</button>" for i, k in enumerate(tabs))
+    panes = "".join(f"<section id='t{i}'{' class=active' if i == 0 else ''}>{v}</section>"
+                    for i, v in enumerate(tabs.values()))
+    updated = pd.Timestamp(built).tz_convert("Europe/Copenhagen").strftime("%d %b %Y %H:%M")
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="{PLOTLY_JS}"></script>
+<style>
+  body {{ margin: 0; background: #faf6f1; color: {INK}; font: 15px/1.5 {FONT}; }}
+  header {{ background: #fff; border-bottom: 1px solid #efe6dc; padding: 0 20px; display: flex; flex-wrap: wrap;
+           align-items: center; gap: 4px 24px; }}
+  header h1 {{ font-size: 17px; font-weight: 600; margin: 14px 0; }}
+  nav {{ display: flex; flex-wrap: wrap; }}
+  nav button {{ font: 500 14px {FONT}; color: {GREY}; background: none; border: 0; padding: 14px 10px; cursor: pointer; }}
+  nav button.active {{ color: {INK}; box-shadow: inset 0 -2px 0 {ORANGE}; }}
+  header .links {{ margin-left: auto; font-size: 13px; display: flex; align-items: center; gap: 16px; }}
+  header .links a {{ color: {GREY}; }}
+  header .links svg {{ display: block; }}
+  .banner {{ background: #fff7ed; border-bottom: 1px solid #fed7aa; color: #9a3412; font-size: 14px; padding: 8px 20px; }}
+  main {{ max-width: 1280px; margin: 0 auto; padding: 18px 16px 40px; }}
+  section {{ display: none; }}
+  section.active {{ display: block; }}
+  .card {{ background: #fff; border: 1px solid #efe6dc; border-radius: 16px; box-shadow: 0 4px 14px rgba(120,72,20,.06);
+          padding: 14px 16px; margin-bottom: 16px; min-width: 0; }}
+  .card-title {{ font-weight: 600; margin-bottom: 8px; }}
+  .kpis {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }}
+  .kpi {{ border-left: 4px solid var(--accent); }}
+  .kpi-label {{ color: {GREY}; font-size: 13px; }}
+  .kpi-value {{ font-size: 24px; font-weight: 600; margin: 2px 0; }}
+  .kpi-sub {{ color: {GREY}; font-size: 13px; }}
+  .grid2 {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }}
+  @media (max-width: 900px) {{ .grid2 {{ grid-template-columns: 1fr; }} }}
+  p {{ color: #3b3f45; }}
+  .note {{ color: {GREY}; font-size: 13px; max-width: 900px; margin-bottom: 0; }}
+  a {{ color: #c2410c; }}
+  footer {{ color: {GREY}; font-size: 12px; text-align: center; padding-bottom: 24px; }}
+  .stale {{ position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; background: #fef2f2; color: #991b1b;
+           border-top: 1px solid #fecaca; font-size: 14px; padding: 10px 20px; text-align: center; }}
+</style>
+</head>
+<body>
+<header><h1>{title}</h1><nav>{nav}</nav>
+<span class="links"><a href="https://jacobazu.github.io/">jacobazu.github.io</a>{link}<a href="https://github.com/jacobazu/dk1-renewables-forecasting" aria-label="GitHub">{GITHUB_ICON}</a></span></header>
+{banner}
+<main>{panes}</main>
+<footer>Updated {updated} (Danish time). Data: Energi Data Service (Energinet), Open-Meteo.com (CC BY 4.0)</footer>
+<div id="stale" class="stale" data-built="{built.isoformat()}" hidden></div>
+<script>
+(() => {{
+  const el = document.getElementById("stale"), built = new Date(el.dataset.built);
+  if (Date.now() - built > 30 * 3600 * 1000) {{
+    el.textContent = "Not updated since " + built.toLocaleString("en-GB", {{ timeZone: "Europe/Copenhagen",
+      day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }}) + " (Danish time). The daily update has not run.";
+    el.hidden = false;
+  }}
+}})();
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {{
+  document.querySelectorAll("nav button, section").forEach(e => e.classList.remove("active"));
+  b.classList.add("active");
+  document.getElementById(b.dataset.tab).classList.add("active");
+  document.querySelectorAll("section.active .plotly-graph-div").forEach(g => Plotly.Plots.resize(g));
+}});
+</script>
+</body>
+</html>
+"""
+
+
+Path("docs").mkdir(exist_ok=True)
+Path("docs/index.html").write_text(render("DK1 wind and solar forecast", live_tabs,
+                                          "<a href='backtest.html'>Backtest</a>"), encoding="utf-8")
+span = f"{local(bt.index).min():%d %b %Y} to {local(bt.index - pd.Timedelta(hours=1)).max():%d %b %Y}"
+Path("docs/backtest.html").write_text(render(
+    "DK1 wind and solar forecast: backtest", bt_tabs, "<a href='index.html'>&larr; Live</a>",
+    f"<div class='banner'>Backtest, {span}, run once on 22 Oct 2026 after the model was chosen on 2025. Every forecast "
+    f"used only weather out before the auction and output settled 10 days before. The live forecasts are on the "
+    f"<a href='index.html'>main page</a>.</div>"), encoding="utf-8")
+print(f"docs/index.html: latest forecast {latest:%d %b %Y}" if latest is not None else "docs/index.html: no forecasts yet")
+print(f"docs/backtest.html: {span}")
