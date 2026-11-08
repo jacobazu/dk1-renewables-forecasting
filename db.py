@@ -58,7 +58,7 @@ def get(url, params):
     for _ in range(150):
         try:
             r = requests.get(url, params=params, timeout=300)
-        except requests.ConnectionError:
+        except (requests.ConnectionError, requests.Timeout):
             time.sleep(30)
             continue
         if r.status_code == 429:
@@ -72,3 +72,9 @@ def get(url, params):
         except ValueError:  # an empty or cut-off answer, try again
             time.sleep(30)
     raise RuntimeError(f"no answer from {url}")
+
+
+def chunks(start, end, days=90):
+    # a long period in one call can time out, so it is asked for in pieces of 90 days
+    cuts = list(pd.date_range(start, end, freq=f"{days}D")) + [end]
+    return [(a, b - pd.Timedelta(days=1) if b < end else b) for a, b in zip(cuts[:-1], cuts[1:]) if a <= b]

@@ -3,7 +3,7 @@
 
 import pandas as pd
 
-from db import POINTS, TODAY, connect, get, save, start_from
+from db import POINTS, TODAY, chunks, connect, get, save, start_from
 
 URL = "https://previous-runs-api.open-meteo.com/v1/forecast"
 MODELS = ["icon_eu", "dmi_harmonie_arome_europe", "metno_nordic", "gfs_seamless"]
@@ -19,19 +19,20 @@ for model in MODELS:
     for point, (lat, lon) in POINTS.items():
         start = start_from(con, "weather_models", 3, f"WHERE point = '{point}' AND model = '{model}'")
         try:
-            js = get(URL, {"latitude": lat, "longitude": lon, "models": model, "start_date": f"{start:%Y-%m-%d}",
-                           "end_date": f"{TODAY + pd.Timedelta(days=1):%Y-%m-%d}", "timezone": "GMT",
-                           "wind_speed_unit": "ms", "hourly": ",".join(v + "_previous_day2" for v in VARIABLES)})
+            for a, b in chunks(start, TODAY + pd.Timedelta(days=1)):
+                js = get(URL, {"latitude": lat, "longitude": lon, "models": model, "start_date": f"{a:%Y-%m-%d}",
+                               "end_date": f"{b:%Y-%m-%d}", "timezone": "GMT", "wind_speed_unit": "ms",
+                               "hourly": ",".join(v + "_previous_day2" for v in VARIABLES)})
+                w = pd.DataFrame(js["hourly"]).rename(columns=lambda c: VARIABLES.get(c.replace("_previous_day2", ""), c))
+                w["time"] = pd.to_datetime(w["time"])
+                w = w.dropna(subset=list(VARIABLES.values()), how="all").assign(point=point, model=model)
+                save(con, "weather_models", w)
         except RuntimeError as e:
             print(f"{model}: skipped, {e}")
             with open("data/skipped.txt", "a") as f:
                 f.write(f"{pd.Timestamp.now():%Y-%m-%d %H:%M} weather_models {model}: {e}\n")
             break
-        w = pd.DataFrame(js["hourly"]).rename(columns=lambda c: VARIABLES.get(c.replace("_previous_day2", ""), c))
-        w["time"] = pd.to_datetime(w["time"])
-        w = w.dropna(subset=list(VARIABLES.values()), how="all").assign(point=point, model=model)
-        save(con, "weather_models", w)
-        print(f"{model} {point}: {len(w)} hours from {start:%Y-%m-%d}")
+        print(f"{model} {point}: from {start:%Y-%m-%d}")
 
 print(con.execute("SELECT model, count(*) AS rows, min(time) AS first, max(time) AS last, "
                   "round(avg(wind_100m), 1) AS wind, round(avg(radiation)) AS radiation "
