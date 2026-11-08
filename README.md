@@ -52,6 +52,15 @@ January to 11 October 2026, mean absolute error in MW. Kept on 2025: ECMWF's fre
 - **Tried on March to December 2025, one at a time, kept if the error there drops:** fleet size as the highest hour in the past year instead of 60 days; the sun's height and direction, ECMWF's direct and diffuse radiation, and the radiation on a panel tilted 35 degrees to the south; and leaving out the other weather models.
 - **Verdict from live days:** the chosen model forecasts every day before the auction from when the daily run starts. It is judged on 1 April to 30 June 2027 against Energinet as published and scaled, with the same rule as above: lower error than both, Diebold-Mariano p < 0.05.
 
+## Live
+
+**Dashboard: [jacobazu.github.io/dk1-renewables-forecasting](https://jacobazu.github.io/dk1-renewables-forecasting/)**
+
+- Every morning before the noon auction, `live.py` forecasts tomorrow's onshore, offshore and solar output with the models chosen above (round 2 for solar), refit on the first of each month on data up to 10 days before, as in the backtest.
+- Each day is forecast once and saved in `forecasts/live_forecasts.csv`, never changed. A day missed before noon stays a gap.
+- Scores come when Energinet's settled output does, 8-10 days later, against Energinet's forecast as published and scaled to the fleet.
+- The dashboard also shows the 2026 backtest: the error by day, forecast against what was produced, and where on the power curve the misses are.
+
 ## License
 
 Code: [MIT](LICENSE). Data from [Energi Data Service](https://www.energidataservice.dk) (Energinet) and [Open-Meteo.com](https://open-meteo.com) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
