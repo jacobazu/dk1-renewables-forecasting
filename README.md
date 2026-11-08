@@ -1,4 +1,4 @@
-# DK1 wind and solar forecasting
+# DK1 wind and solar forecasting (live: offshore wind)
 
 How close can a forecast of DK1 wind and solar power, made before the noon day-ahead auction from public weather forecasts, get to what is produced? Energinet publishes its own forecast only after the auction, so a trader can't use it to bid. In Python, with the data in DuckDB.
 
@@ -50,16 +50,17 @@ January to 11 October 2026, mean absolute error in MW. Kept on 2025: ECMWF's fre
 2026 has been used, so it can't judge a new solar model. Instead:
 
 - **Tried on March to December 2025, one at a time, kept if the error there drops:** fleet size as the highest hour in the past year instead of 60 days; the sun's height and direction, ECMWF's direct and diffuse radiation, and the radiation on a panel tilted 35 degrees to the south; and leaving out the other weather models.
-- **Verdict from live days:** the chosen model forecasts every day before the auction from when the daily run starts. It is judged on 1 April to 30 June 2027 against Energinet as published and scaled, with the same rule as above: lower error than both, Diebold-Mariano p < 0.05.
+- **Verdict from live days:** planned for 1 April to 30 June 2027. Dropped on 8 Nov 2026, when the live run was limited to offshore; the round-2 choice stays in `results/solar_choice.json`.
 
 ## Live
 
 **Dashboard: [jacobazu.github.io/dk1-renewables-forecasting](https://jacobazu.github.io/dk1-renewables-forecasting/)**
 
-- Every morning before the noon auction, `live.py` forecasts tomorrow's onshore, offshore and solar output with the models chosen above (round 2 for solar), refit on the first of each month on data up to 10 days before, as in the backtest.
+- **Offshore wind only.** It is the one target that beat Energinet on 2026. Onshore and solar were tried with the same rules and didn't, so they don't run live, and the round-2 solar model isn't judged on live days after all.
+- Every morning before the noon auction, `live.py` forecasts tomorrow's offshore output with the model chosen above, refit on the first of each month on data up to 10 days before, as in the backtest.
 - Each day is forecast once and saved in `forecasts/live_forecasts.csv`, never changed. A day missed before noon stays a gap.
 - Scores come when Energinet's settled output does, 8-10 days later, against Energinet's forecast as published and scaled to the fleet.
-- The dashboard also shows the 2026 backtest: the error by day, forecast against what was produced, and where on the power curve the misses are.
+- The dashboard also shows the 2026 backtest for offshore: the error by day, forecast against what was produced, and where on the power curve the misses are, with onshore and solar as tried but not beaten.
 
 ## License
 

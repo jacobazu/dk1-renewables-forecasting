@@ -1,4 +1,5 @@
-# dashboard: docs/index.html (live forecasts and their track record) and docs/backtest.html (2026, run once)
+# dashboard for the offshore wind forecast: docs/index.html (live forecasts and their track record) and
+# docs/backtest.html (2026, run once, with onshore and solar as tried but not beaten)
 #   python dashboard.py
 
 from datetime import datetime, timezone
@@ -13,7 +14,7 @@ ORANGE, GREEN, BLUE, RED = "#f97316", "#16a34a", "#0ea5e9", "#dc2626"
 INK, GREY, LINE, GRID, BEIGE = "#1f2328", "#6b7280", "#e5ddd3", "#f1ebe4", "#cfc6bb"
 FONT = "IBM Plex Sans, Segoe UI, Helvetica Neue, Arial, sans-serif"
 PLOTLY_JS = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@4.1.1/plotly.min.js"
-TARGETS = {"offshore": "Offshore wind", "onshore": "Onshore wind", "solar": "Solar"}
+TARGETS = {"offshore": "Offshore wind"}
 DELAY = 10
 GITHUB_ICON = ('<svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 '
                '3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94'
@@ -209,8 +210,6 @@ for t, name in TARGETS.items():
 
 bt = pd.read_csv("results/final_forecasts.csv", parse_dates=["time"]).set_index("time")
 fs = pd.read_csv("results/final_scores.csv").set_index("target")
-SOLAR_NOTE = (" The live forecast uses a second solar model, chosen on 2025 only (fleet size over a year, the sun's "
-              "position and the radiation on a tilted panel). It is judged on live days, 1 April to 30 June 2027.")
 bt_tabs = {}
 for t, name in TARGETS.items():
     f = bt[bt["target"] == t]
@@ -235,7 +234,7 @@ for t, name in TARGETS.items():
         kpi("Energinet, as published", mw(en), gap(ours, en), GREY) +
         kpi("Energinet, scaled to the fleet", mw(ens), gap(ours, ens), GREY) +
         "</div>" +
-        card("Verdict", f"<p>{verdict}.{SOLAR_NOTE if t == 'solar' else ''}</p>") +
+        card("Verdict", f"<p>{verdict}.</p>") +
         card("Is the gap steady? Error by day, 14-day average", trend_chart(f, 14),
              "Energinet's published forecast seems to miss part of the fleet; scaled up, it is what a trader could "
              "get by correcting it with the last 60 settled days.") +
@@ -248,6 +247,25 @@ for t, name in TARGETS.items():
         card("Error by month", style(figm, 300)) +
         card("Error by hour of the day", hour_chart(f)) +
         "</div>")
+
+
+# onshore and solar: tried on the same rules, not beaten, so not run live
+names = {"onshore": "Onshore wind", "solar": "Solar", "offshore": "Offshore wind"}
+rows = "".join(
+    f"<tr><td>{names[t]}</td><td class=n>{mw(r['ours'])}</td><td class=n>{mw(r['energinet'])}</td>"
+    f"<td class=n>{mw(r['energinet_scaled'])}</td><td>{'yes' if r['beaten'] else 'no'}</td></tr>"
+    for t, r in fs.loc[["offshore", "onshore", "solar"]].iterrows())
+TRIED = card("Also tried: onshore wind and solar",
+             "<table><tr><th>2026, mean absolute error</th><th class=n>Ours</th><th class=n>Energinet</th>"
+             f"<th class=n>Energinet scaled</th><th>Beaten</th></tr>{rows}</table>",
+             "The same rules and the same weather were used for all three. Onshore was lower than Energinet's "
+             "published forecast but not significantly (p = 0.06), and behind it scaled to the fleet. Solar was "
+             "behind both. Energinet knows every wind farm and solar plant and forecasts later, so only offshore, "
+             "where its forecast misses part of the fleet, runs live.")
+bt_tabs["Offshore wind"] += TRIED
+live_tabs["Offshore wind"] += card("Why only offshore", "<p>Onshore wind and solar were tried with the same rules "
+                                   "but didn't beat Energinet on 2026. See the <a href='backtest.html'>backtest</a>."
+                                   "</p>")
 
 
 # --- page ---------------------------------------------------------------------------------------------------
@@ -292,6 +310,10 @@ def render(title, tabs, link, banner=""):
   .kpi-sub {{ color: {GREY}; font-size: 13px; }}
   .grid2 {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }}
   @media (max-width: 900px) {{ .grid2 {{ grid-template-columns: 1fr; }} }}
+  table {{ border-collapse: collapse; width: 100%; font-size: 14px; }}
+  th, td {{ text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid #f1ebe4; }}
+  th {{ color: {GREY}; font-weight: 500; font-size: 13px; }}
+  .n {{ text-align: right; font-variant-numeric: tabular-nums; }}
   p {{ color: #3b3f45; }}
   .note {{ color: {GREY}; font-size: 13px; max-width: 900px; margin-bottom: 0; }}
   a {{ color: #c2410c; }}
@@ -329,11 +351,11 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {{
 
 
 Path("docs").mkdir(exist_ok=True)
-Path("docs/index.html").write_text(render("DK1 wind and solar forecast", live_tabs,
+Path("docs/index.html").write_text(render("DK1 offshore wind forecast", live_tabs,
                                           "<a href='backtest.html'>Backtest</a>"), encoding="utf-8")
 span = f"{local(bt.index).min():%d %b %Y} to {local(bt.index - pd.Timedelta(hours=1)).max():%d %b %Y}"
 Path("docs/backtest.html").write_text(render(
-    "DK1 wind and solar forecast: backtest", bt_tabs, "<a href='index.html'>&larr; Live</a>",
+    "DK1 offshore wind forecast: backtest", bt_tabs, "<a href='index.html'>&larr; Live</a>",
     f"<div class='banner'>Backtest, {span}, run once on 22 Oct 2026 after the model was chosen on 2025. Every forecast "
     f"used only weather out before the auction and output settled 10 days before. The live forecasts are on the "
     f"<a href='index.html'>main page</a>.</div>"), encoding="utf-8")
