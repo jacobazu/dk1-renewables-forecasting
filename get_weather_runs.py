@@ -2,7 +2,8 @@
 # the run is ready around 07 utc, before a forecast made at 10:00 danish time. one request per run, all points at once
 # about 8,600 calls to open-meteo in all, more than its hourly limit, so it waits when needed. it can be stopped
 # and started again: runs already saved are skipped. newest runs first, so today's run is there for the forecast.
-# before the auction it stops at 11:20 danish time to leave time for the forecast; later in the day after 3 hours
+# before the auction it stops at 11:20 danish time to leave time for the forecast; later in the day after 3 hours.
+# the newest run is always fetched, the forecast needs it
 
 import time
 
@@ -39,7 +40,7 @@ for i, run in enumerate(runs):
     try:
         js = get(URL, {"latitude": lats, "longitude": lons, "models": MODEL, "run": f"{run:%Y-%m-%dT%H:%M}",
                        "forecast_days": 3, "timezone": "GMT", "wind_speed_unit": "ms",
-                       "hourly": ",".join(VARIABLES)}, until=stop.timestamp())
+                       "hourly": ",".join(VARIABLES)}, until=stop.timestamp() if i else None)
         parts = []
         for point, loc in zip(POINTS, js if isinstance(js, list) else [js]):
             w = pd.DataFrame(loc["hourly"]).rename(columns=VARIABLES)
