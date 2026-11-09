@@ -19,6 +19,10 @@ concurrency:
   group: live
   cancel-in-progress: false
 
+# print progress as it happens, not at the end
+env:
+  PYTHONUNBUFFERED: "1"
+
 jobs:
   forecast:
     runs-on: ubuntu-24.04
