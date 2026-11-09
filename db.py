@@ -53,9 +53,12 @@ def start_from(con, table, days_back, where=""):
     return START if last is None else pd.Timestamp(last).floor("D") - pd.Timedelta(days=days_back)
 
 
-def get(url, params):
-    # open-meteo allows 600 calls a minute and 5,000 an hour, so a long download waits when it hits the limit
+def get(url, params, until=None):
+    # open-meteo allows 600 calls a minute and 5,000 an hour, so a long download waits when it hits the limit.
+    # until: a time.time() to give up waiting at
     for _ in range(150):
+        if until and time.time() > until:
+            raise TimeoutError("out of time")
         try:
             r = requests.get(url, params=params, timeout=300)
         except (requests.ConnectionError, requests.Timeout):

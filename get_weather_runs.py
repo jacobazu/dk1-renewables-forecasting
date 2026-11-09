@@ -1,7 +1,10 @@
 # ecmwf's 00 utc run from the day before each day, from open-meteo's archive of single runs (from 14 march 2024)
 # the run is ready around 07 utc, before a forecast made at 10:00 danish time. one request per run, all points at once
 # about 8,600 calls to open-meteo in all, more than its hourly limit, so it waits when needed. it can be stopped
-# and started again: runs already saved are skipped
+# and started again: runs already saved are skipped. newest runs first, so today's run is there for the forecast.
+# before the auction it stops at 11:20 danish time to leave time for the forecast; later in the day after 3 hours
+
+import time
 
 import pandas as pd
 
@@ -23,8 +26,12 @@ VARIABLES = {
 
 con = connect()
 done = set(con.execute("SELECT DISTINCT run FROM weather_runs").df()["run"])
-runs = [r for r in pd.date_range(FIRST_RUN, TODAY, freq="D") if r not in done]
-print(f"{len(runs)} runs to download")
+runs = [r for r in pd.date_range(FIRST_RUN, TODAY, freq="D") if r not in done][::-1]
+now = pd.Timestamp.now(tz="Europe/Copenhagen")
+stop = now.normalize() + pd.Timedelta(hours=11, minutes=20)
+if now >= stop:
+    stop = now + pd.Timedelta(hours=3)
+print(f"{len(runs)} runs to download, stopping at {stop:%H:%M} at the latest")
 
 lats = ",".join(str(lat) for lat, _ in POINTS.values())
 lons = ",".join(str(lon) for _, lon in POINTS.values())
@@ -32,13 +39,16 @@ for i, run in enumerate(runs):
     try:
         js = get(URL, {"latitude": lats, "longitude": lons, "models": MODEL, "run": f"{run:%Y-%m-%dT%H:%M}",
                        "forecast_days": 3, "timezone": "GMT", "wind_speed_unit": "ms",
-                       "hourly": ",".join(VARIABLES)})
+                       "hourly": ",".join(VARIABLES)}, until=stop.timestamp())
         parts = []
         for point, loc in zip(POINTS, js if isinstance(js, list) else [js]):
             w = pd.DataFrame(loc["hourly"]).rename(columns=VARIABLES)
             w["time"] = pd.to_datetime(w["time"])
             parts.append(w.assign(point=point, run=run))
         w = pd.concat(parts)
+    except TimeoutError:
+        print(f"out of time with {len(runs) - i} runs left, the next run goes on")
+        break
     except Exception as e:  # a run missing from the archive is skipped and written down
         print(f"{run:%Y-%m-%d}: skipped, {e}")
         with open("data/skipped.txt", "a") as f:
