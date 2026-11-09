@@ -30,7 +30,7 @@ done = set(con.execute("SELECT DISTINCT run FROM weather_runs").df()["run"])
 runs = [r for r in pd.date_range(FIRST_RUN, TODAY, freq="D") if r not in done][::-1]
 now = pd.Timestamp.now(tz="Europe/Copenhagen")
 stop = now.normalize() + pd.Timedelta(hours=11, minutes=20)
-if now >= stop:
+if now.hour >= 12:  # the auction has closed, so no forecast waits on this
     stop = now + pd.Timedelta(hours=3)
 print(f"{len(runs)} runs to download, stopping at {stop:%H:%M} at the latest")
 
