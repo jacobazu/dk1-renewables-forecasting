@@ -73,8 +73,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # no forecasts folder yet (no forecast made so far): nothing to save
+          [ -d forecasts ] || exit 0
           git add forecasts
-          git commit -m "Forecast made $(date -u '+%F %H:%M') UTC" || echo "Nothing new to commit"
+          git diff --cached --quiet && exit 0
+          git commit -m "Forecast made $(date -u '+%F %H:%M') UTC"
           for try in 1 2 3; do
             if git pull --rebase origin main && git push; then exit 0; fi
             git rebase --abort 2>/dev/null || true
