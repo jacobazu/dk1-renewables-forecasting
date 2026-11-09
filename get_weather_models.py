@@ -1,4 +1,4 @@
-# the same weather from four other models, made two days before each hour, as extra inputs
+# the same weather from two other models, made two days before each hour, as extra inputs
 # a model open-meteo doesn't have, or doesn't archive, is skipped with its reason
 
 import pandas as pd
@@ -6,7 +6,8 @@ import pandas as pd
 from db import POINTS, TODAY, chunks, connect, get, save, start_from
 
 URL = "https://previous-runs-api.open-meteo.com/v1/forecast"
-MODELS = ["icon_eu", "dmi_harmonie_arome_europe", "metno_nordic", "gfs_seamless"]
+# dmi harmonie and met norway nordic were tried too, but open-meteo keeps no history of them, so they are left out
+MODELS = ["icon_eu", "gfs_seamless"]
 VARIABLES = {
     "wind_speed_100m": "wind_100m",
     "wind_direction_100m": "direction_100m",
