@@ -35,7 +35,21 @@ fc = fc.rename(columns=FORECAST).reset_index()
 fc["time"] = pd.to_datetime(fc.pop("HourUTC"))
 save(con, "energinet", fc)
 
-for table in ["production", "energinet"]:
+# real-time output, 5 minutes, minutes late: a provisional score until the settled numbers come
+try:
+    raw = records("ElectricityProdex5MinRealtime", max(start_from(con, "production_rt", 2), TODAY - pd.Timedelta(days=20)),
+                  TODAY + pd.Timedelta(days=1))
+    if len(raw):
+        rt = pd.DataFrame({"time": pd.to_datetime(raw["Minutes5UTC"]).dt.floor("h"), "onshore": raw["OnshoreWindPower"],
+                           "offshore": raw["OffshoreWindPower"], "solar": raw["SolarPower"]})
+        rt = rt.groupby("time").agg(["mean", "size"])
+        full = rt[("offshore", "size")] == 12   # only whole hours
+        rt = rt.xs("mean", axis=1, level=1)[full].reset_index()
+        save(con, "production_rt", rt)
+except Exception as e:
+    print("real-time output not updated:", e)
+
+for table in ["production", "energinet", "production_rt"]:
     d = con.execute(f"SELECT * FROM {table} ORDER BY time").df()
     gaps = pd.date_range(d["time"].min(), d["time"].max(), freq="h").difference(d["time"])
     print(f"\n{table}: {d['time'].min()} to {d['time'].max()} utc, {len(d)} hours, {len(gaps)} missing")

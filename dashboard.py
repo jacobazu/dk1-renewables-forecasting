@@ -143,15 +143,50 @@ def scores(f):
     return e("forecast"), e("energinet"), e("energinet_scaled")
 
 
+def daily_chart(f):
+    """mean absolute error per day; pale bars: scored on real-time output, settled numbers still to come"""
+    d = f.assign(day=local(f.index).normalize().tz_localize(None))
+    g = d.groupby("day").apply(lambda x: pd.Series({k: (x[k] - x["actual"]).abs().mean() for k in
+                               ["forecast", "energinet", "energinet_scaled"]} | {"prov": x["provisional"].any()}))
+    fig = go.Figure()
+    for col, nm, c in [("energinet", "Energinet, as published", BEIGE), ("energinet_scaled", "Energinet, scaled", GREY),
+                       ("forecast", "Ours", ORANGE)]:
+        fig.add_trace(go.Bar(x=g.index, y=g[col], name=nm, marker=dict(color=c, cornerradius=3,
+                             opacity=[0.45 if p else 1 for p in g["prov"]]),
+                             hovertemplate=nm + " %{y:,.0f} MW<extra></extra>"))
+    fig.update_layout(barmode="group", bargap=0.3)
+    fig.update_xaxes(tickformat="%d %b")
+    fig.update_yaxes(ticksuffix=" MW")
+    return style(fig, 280) + ("<p class=note>Pale: scored on real-time output, settled numbers still to come.</p>"
+                              if g["prov"].any() else "")
+
+
+def last_day_chart(f):
+    days = local(f.index).normalize()
+    d = f[days == days.max()]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=local(d.index), y=d["actual"], name="Produced", line=dict(color=INK, width=2.5, shape="hv"),
+                             hovertemplate="Produced %{y:,.0f} MW<extra></extra>"))
+    fig.add_trace(go.Scatter(x=local(d.index), y=d["energinet"], name="Energinet", line=dict(color=GREY, width=1.6,
+                             dash="dot", shape="hv"), hovertemplate="Energinet %{y:,.0f} MW<extra></extra>"))
+    fig.add_trace(go.Scatter(x=local(d.index), y=d["forecast"], name="Ours", line=dict(color=ORANGE, width=2.5, shape="hv"),
+                             hovertemplate="Ours %{y:,.0f} MW<extra></extra>"))
+    fig.update_yaxes(ticksuffix=" MW", rangemode="tozero")
+    return style(fig, 280)
+
+
 # --- live page ---------------------------------------------------------------------------------------------
 
 log = pd.read_csv("forecasts/live_forecasts.csv", parse_dates=["date", "time"]) \
     if Path("forecasts/live_forecasts.csv").exists() else pd.DataFrame(columns=["date", "time", "target", "forecast"])
-prod = energinet = None
+prod = energinet = rt = None
 if Path("data/dk1.duckdb").exists():
     con = duckdb.connect("data/dk1.duckdb", read_only=True)
     prod = con.execute("SELECT * FROM production ORDER BY time").df().set_index("time")
     energinet = con.execute("SELECT * FROM energinet ORDER BY time").df().set_index("time")
+    tables = con.execute("SELECT table_name FROM information_schema.tables").df()["table_name"].tolist()
+    if "production_rt" in tables:
+        rt = con.execute("SELECT * FROM production_rt ORDER BY time").df().set_index("time")
     con.close()
 
 live_tabs = {}
@@ -180,29 +215,35 @@ for t, name in TARGETS.items():
         blocks.append(card(f"Forecast for {latest:%A %d %B}, made {made:%d %b %H:%M} (Danish time)", style(fig, 320),
                            "Made before the noon day-ahead auction. Energinet's forecast is added when it is published, "
                            "after the auction."))
-    # track record: settled output comes 8-10 days late
+    # track record: settled output where it is out (8-10 days late), real-time output until then
     done = pd.DataFrame()
     if prod is not None and len(lt):
-        done = lt[["forecast", "cap"]].join(prod[t].rename("actual"), how="inner")
+        actual = prod[t]
+        if rt is not None:
+            actual = actual.combine_first(rt[t])
+        done = lt[["forecast", "cap"]].join(actual.rename("actual"), how="inner")
+        done["provisional"] = ~done.index.isin(prod[t].dropna().index)
         done["energinet"] = energinet[t].reindex(done.index)
         done["energinet_scaled"] = scaled(energinet[t], prod[t]).reindex(done.index)
-        done = done.dropna()
+        done = done.dropna(subset=["forecast", "actual", "energinet"])
+        done["energinet_scaled"] = done["energinet_scaled"].fillna(done["energinet"])
     if len(done) >= 24:
         ours, en, ens = scores(done)
-        n = len(done.index.normalize().unique())
+        days = local(done.index).normalize()
+        n, k = len(days.unique()), len(days[done["provisional"]].unique())
+        sub = f"{n} day{'s' * (n != 1)}" + (f", {k} provisional" if k else "")
         blocks.append("<div class='kpis'>" +
-                      kpi("Our error since launch", mw(ours), f"mean absolute error, {n} settled days", ORANGE) +
+                      kpi("Our error since launch", mw(ours), sub, ORANGE) +
                       kpi("Energinet, as published", mw(en), gap(ours, en), GREY) +
-                      kpi("Energinet, scaled to the fleet", mw(ens), gap(ours, ens),
-                          GREY) + "</div>")
-        blocks.append(card("Error by day, 7-day average", trend_chart(done, 7)))
-        blocks.append(card("Forecast against what was produced, every live hour", scatter_chart(done, done["cap"]),
-                           "On the dashed line the forecast was exactly right. Points above it: more was produced "
-                           "than forecast."))
+                      kpi("Energinet, scaled to the fleet", mw(ens), gap(ours, ens), GREY) + "</div>")
+        blocks.append("<div class='grid2'>" + card("Error each day", daily_chart(done)) +
+                      card(f"Last day, {days.max():%a %d %b}", last_day_chart(done)) + "</div>")
+        if n >= 14:
+            blocks.append(card("Error by day, 7-day average", trend_chart(done, 7)))
+        blocks.append(card("Forecast against what was produced, every live hour", scatter_chart(done, done["cap"])))
     else:
-        blocks.append(card("Track record", "<p>Energinet's settled production comes 8 to 10 days late, so the first "
-                                           "live scores show up about ten days after launch. Until then the "
-                                           "<a href='backtest.html'>backtest</a> shows how the model did on 2026.</p>"))
+        blocks.append(card("Track record", "<p>Scored from the day after the first forecast: first with Energinet's "
+                                           "real-time output, then with the settled numbers 8 to 10 days later.</p>"))
     live_tabs[name] = "".join(blocks)
 
 
@@ -356,8 +397,7 @@ Path("docs/index.html").write_text(render("DK1 offshore wind forecast", live_tab
 span = f"{local(bt.index).min():%d %b %Y} to {local(bt.index - pd.Timedelta(hours=1)).max():%d %b %Y}"
 Path("docs/backtest.html").write_text(render(
     "DK1 offshore wind forecast: backtest", bt_tabs, "<a href='index.html'>&larr; Live</a>",
-    f"<div class='banner'>Backtest, {span}, run once on 22 Oct 2026 after the model was chosen on 2025. Every forecast "
-    f"used only weather out before the auction and output settled 10 days before. The live forecasts are on the "
-    f"<a href='index.html'>main page</a>.</div>"), encoding="utf-8")
+    f"<div class='banner'>Tested on {span}. The model was picked on earlier data, then run once. Each forecast used "
+    f"only weather out before the auction.</div>"), encoding="utf-8")
 print(f"docs/index.html: latest forecast {latest:%d %b %Y}" if latest is not None else "docs/index.html: no forecasts yet")
 print(f"docs/backtest.html: {span}")

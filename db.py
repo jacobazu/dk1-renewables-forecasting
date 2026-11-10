@@ -11,6 +11,7 @@ TODAY = pd.Timestamp.today().floor("D")
 TABLES = {
     "production": "time TIMESTAMP PRIMARY KEY, onshore DOUBLE, offshore DOUBLE, solar DOUBLE",
     "energinet": "time TIMESTAMP PRIMARY KEY, onshore DOUBLE, offshore DOUBLE, solar DOUBLE",
+    "production_rt": "time TIMESTAMP PRIMARY KEY, onshore DOUBLE, offshore DOUBLE, solar DOUBLE",
     "weather": "time TIMESTAMP, point VARCHAR, wind_100m DOUBLE, direction_100m DOUBLE, wind_10m DOUBLE, "
                "temperature DOUBLE, radiation DOUBLE, cloud_cover DOUBLE, PRIMARY KEY (time, point)",
     "weather_runs": "run TIMESTAMP, time TIMESTAMP, point VARCHAR, wind_100m DOUBLE, direction_100m DOUBLE, "
