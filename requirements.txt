@@ -1,8 +1,9 @@
 duckdb
 lightgbm
 matplotlib
+numpy
 pandas
+plotly
 requests
 scikit-learn
 statsmodels
-plotly
