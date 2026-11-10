@@ -16,7 +16,7 @@ LAND = ["west_jutland", "north_jutland", "mid_jutland", "south_jutland", "east_j
 SEA = ["horns_rev", "thor", "anholt"]
 TEST_START = pd.Timestamp("2025-03-01")
 DELAY = 10  # days before settled output is known
-COLOR = {"power curve": "#eb6834", "lightgbm": "#2a78d6", "average": "#1baf7a", "energinet": "#8a8984"}
+COLOR = {"power curve": "#1b66ad", "lightgbm": "#c2522d", "average": "#2a9d8f", "energinet": "#7d8590"}
 
 con = duckdb.connect("data/dk1.duckdb", read_only=True)
 prod = con.execute("SELECT * FROM production ORDER BY time").df().set_index("time")
@@ -117,7 +117,7 @@ for ax, t in zip(axes, TARGETS):
     ax.xaxis.set_major_locator(mdates.MonthLocator((1, 4, 7, 10)))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %y"))
     ax.spines[["top", "right"]].set_visible(False)
-    ax.grid(color="#e4e3df", lw=0.6)
+    ax.grid(color="#e1e4e8", lw=0.6)
 axes[0].set_ylabel("mean absolute error, % of fleet")
 axes[0].legend(frameon=False)
 fig.tight_layout()

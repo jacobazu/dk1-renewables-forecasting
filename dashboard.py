@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-ORANGE, GREEN, BLUE, RED = "#f97316", "#16a34a", "#0ea5e9", "#dc2626"
-INK, GREY, LINE, GRID, BEIGE = "#1f2328", "#6b7280", "#e5ddd3", "#f1ebe4", "#cfc6bb"
+ACCENT, GREEN, TEAL, RED = "#1b66ad", "#16a34a", "#2a9d8f", "#dc2626"
+INK, GREY, LINE, GRID, BEIGE = "#1f2328", "#6b7280", "#dde1e6", "#eceef1", "#c3c8cf"
 FONT = "IBM Plex Sans, Segoe UI, Helvetica Neue, Arial, sans-serif"
 PLOTLY_JS = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@4.1.1/plotly.min.js"
 TARGETS = {"offshore": "Offshore wind"}
@@ -38,7 +38,7 @@ def style(fig, height, legend_y=-0.18):
         height=height, margin=dict(l=10, r=10, t=10, b=10), font=dict(family=FONT, color=GREY, size=12),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified",
         legend=dict(orientation="h", x=0, y=legend_y, font=dict(color=INK)),
-        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#efe6dc", font=dict(color=INK, family=FONT)))
+        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#e1e4e8", font=dict(color=INK, family=FONT)))
     fig.update_xaxes(showgrid=False, zeroline=False, linecolor=LINE, color=GREY)
     fig.update_yaxes(gridcolor=GRID, zerolinecolor=BEIGE, color=GREY)
     return fig.to_html(full_html=False, include_plotlyjs=False, config=dict(displayModeBar=False, responsive=True))
@@ -74,7 +74,7 @@ def trend_chart(f, window):
     fig = go.Figure()
     for k, name, color, dash in [("energinet", "Energinet, as published", GREY, "dot"),
                                  ("energinet_scaled", "Energinet, scaled to the fleet", GREY, "solid"),
-                                 ("forecast", "Ours", ORANGE, "solid")]:
+                                 ("forecast", "Ours", ACCENT, "solid")]:
         fig.add_trace(go.Scatter(x=daily.index, y=daily[k], name=name, mode="lines",
                                  line=dict(color=color, width=2.5 if k == "forecast" else 1.6, dash=dash),
                                  hovertemplate=f"{name}: %{{y:,.0f}} MW<extra></extra>"))
@@ -89,7 +89,7 @@ def scatter_chart(f, cap):
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=[0, top], y=[0, top], mode="lines", line=dict(color=BEIGE, dash="dash"),
                              hoverinfo="skip", showlegend=False))
-    for k, name, color in [("energinet", "Energinet, as published", GREY), ("forecast", "Ours", ORANGE)]:
+    for k, name, color in [("energinet", "Energinet, as published", GREY), ("forecast", "Ours", ACCENT)]:
         fig.add_trace(go.Scatter(x=s[k], y=s["actual"], name=name, mode="markers",
                                  marker=dict(color=color, size=4, opacity=0.35),
                                  hovertemplate=f"{name} %{{x:,.0f}} MW, produced %{{y:,.0f}} MW<extra></extra>"))
@@ -111,7 +111,7 @@ def level_chart(f):
     fig.add_trace(go.Bar(x=labels, y=g["energinet_scaled"], name="Energinet, scaled to the fleet",
                          marker=dict(color=BEIGE, cornerradius=4), customdata=n,
                          hovertemplate="%{x}: %{y:,.0f} MW (%{customdata} hours)<extra></extra>"))
-    fig.add_trace(go.Bar(x=labels, y=g["forecast"], name="Ours", marker=dict(color=ORANGE, cornerradius=4),
+    fig.add_trace(go.Bar(x=labels, y=g["forecast"], name="Ours", marker=dict(color=ACCENT, cornerradius=4),
                          customdata=n, hovertemplate="%{x}: %{y:,.0f} MW (%{customdata} hours)<extra></extra>"))
     fig.update_layout(barmode="group", hovermode="closest")
     fig.update_xaxes(title="our forecast as a share of the fleet", tickangle=0)
@@ -126,7 +126,7 @@ def hour_chart(f):
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=g.index, y=g["energinet_scaled"], name="Energinet, scaled to the fleet",
                              line=dict(color=GREY, width=1.6), hovertemplate="%{y:,.0f} MW<extra></extra>"))
-    fig.add_trace(go.Scatter(x=g.index, y=g["forecast"], name="Ours", line=dict(color=ORANGE, width=2.5),
+    fig.add_trace(go.Scatter(x=g.index, y=g["forecast"], name="Ours", line=dict(color=ACCENT, width=2.5),
                              hovertemplate="%{y:,.0f} MW<extra></extra>"))
     fig.update_xaxes(title="hour, Danish time", dtick=3)
     fig.update_yaxes(ticksuffix=" MW", rangemode="tozero")
@@ -163,7 +163,7 @@ def daily_chart(f):
                                ["forecast", "energinet", "energinet_scaled"]} | {"prov": x["provisional"].any()}))
     fig = go.Figure()
     for col, nm, c in [("energinet", "Energinet, as published", BEIGE), ("energinet_scaled", "Energinet, scaled", GREY),
-                       ("forecast", "Ours", ORANGE)]:
+                       ("forecast", "Ours", ACCENT)]:
         fig.add_trace(go.Bar(x=g.index, y=g[col], name=nm, marker=dict(color=c, cornerradius=3,
                              opacity=[0.45 if p else 1 for p in g["prov"]]),
                              hovertemplate=nm + " %{y:,.0f} MW<extra></extra>"))
@@ -182,7 +182,7 @@ def last_day_chart(f):
                              hovertemplate="Produced %{y:,.0f} MW<extra></extra>"))
     fig.add_trace(go.Scatter(x=local(d.index), y=d["energinet"], name="Energinet", line=dict(color=GREY, width=1.6,
                              dash="dot", shape="hv"), hovertemplate="Energinet %{y:,.0f} MW<extra></extra>"))
-    fig.add_trace(go.Scatter(x=local(d.index), y=d["forecast"], name="Ours", line=dict(color=ORANGE, width=2.5, shape="hv"),
+    fig.add_trace(go.Scatter(x=local(d.index), y=d["forecast"], name="Ours", line=dict(color=ACCENT, width=2.5, shape="hv"),
                              hovertemplate="Ours %{y:,.0f} MW<extra></extra>"))
     fig.update_yaxes(ticksuffix=" MW", rangemode="tozero")
     return style(fig, 280)
@@ -220,16 +220,16 @@ for t, name in TARGETS.items():
             fig.add_trace(go.Scatter(x=local(day.index), y=b[hi], line=dict(width=0, shape="hv"), showlegend=False,
                                      hoverinfo="skip"))
             fig.add_trace(go.Scatter(x=local(day.index), y=b[lo], line=dict(width=0, shape="hv"), fill="tonexty",
-                                     fillcolor=f"rgba(249,115,22,{a})", name=nm, hoverinfo="skip"))
-        fig.add_trace(go.Scatter(x=local(day.index), y=day["forecast"], name="Ours", line=dict(color=ORANGE, width=2.5,
+                                     fillcolor=f"rgba(27,102,173,{a})", name=nm, hoverinfo="skip"))
+        fig.add_trace(go.Scatter(x=local(day.index), y=day["forecast"], name="Ours", line=dict(color=ACCENT, width=2.5,
                                  shape="hv"), customdata=b[["q05", "q95"]].to_numpy(),
                                  hovertemplate="Ours %{y:,.0f} MW · 9 in 10: %{customdata[0]:,.0f}–%{customdata[1]:,.0f}<extra></extra>"))
         fig.update_yaxes(ticksuffix=" MW", rangemode="tozero")
         made = pd.Timestamp(day["issued"].iloc[0]).tz_localize("UTC").tz_convert("Europe/Copenhagen")
         blocks.append("<div class='kpis'>" +
-                      kpi(f"{name}, {latest:%a %d %b}", mw(day["forecast"].mean()), "average over the day", ORANGE) +
+                      kpi(f"{name}, {latest:%a %d %b}", mw(day["forecast"].mean()), "average over the day", ACCENT) +
                       kpi("Highest hour", mw(day["forecast"].max()),
-                          f"at {local(day.index)[day['forecast'].to_numpy().argmax()]:%H:%M}", ORANGE) +
+                          f"at {local(day.index)[day['forecast'].to_numpy().argmax()]:%H:%M}", ACCENT) +
                       kpi("Fleet size used", mw(day["cap"].iloc[0]), "highest hour in the period before", GREY) +
                       "</div>")
         blocks.append(card(f"Forecast for {latest:%A %d %B}, made {made:%d %b %H:%M} (Danish time)", style(fig, 320),
@@ -253,7 +253,7 @@ for t, name in TARGETS.items():
         n, k = len(days.unique()), len(days[done["provisional"]].unique())
         sub = f"{n} day{'s' * (n != 1)}" + (f", {k} provisional" if k else "")
         blocks.append("<div class='kpis'>" +
-                      kpi("Our error since launch", mw(ours), sub, ORANGE) +
+                      kpi("Our error since launch", mw(ours), sub, ACCENT) +
                       kpi("Energinet, as published", mw(en), gap(ours, en), GREY) +
                       kpi("Energinet, scaled to the fleet", mw(ens), gap(ours, ens), GREY) + "</div>")
         blocks.append("<div class='grid2'>" + card("Error each day", daily_chart(done)) +
@@ -286,12 +286,12 @@ for t, name in TARGETS.items():
                           name="Energinet, scaled to the fleet", marker=dict(color=BEIGE, cornerradius=4),
                           hovertemplate="%{y:,.0f} MW<extra></extra>"))
     figm.add_trace(go.Bar(x=pd.to_datetime(month.index).strftime("%b"), y=month["forecast"], name="Ours",
-                          marker=dict(color=ORANGE, cornerradius=4), hovertemplate="%{y:,.0f} MW<extra></extra>"))
+                          marker=dict(color=ACCENT, cornerradius=4), hovertemplate="%{y:,.0f} MW<extra></extra>"))
     figm.update_layout(barmode="group")
     figm.update_yaxes(ticksuffix=" MW")
     bt_tabs[name] = (
         "<div class='kpis'>" +
-        kpi("Our error", mw(ours), "mean absolute error per hour", ORANGE) +
+        kpi("Our error", mw(ours), "mean absolute error per hour", ACCENT) +
         kpi("Energinet, as published", mw(en), gap(ours, en), GREY) +
         kpi("Energinet, scaled to the fleet", mw(ens), gap(ours, ens), GREY) +
         "</div>" +
@@ -326,7 +326,7 @@ TRIED = card("Also tried: onshore wind and solar",
 if Path("results/value.csv").exists():
     val = pd.read_csv("results/value.csv").set_index("forecast")
     order = ["Ours", "Energinet, scaled to the fleet", "Energinet, as published"]
-    cols = [ORANGE, GREY, BEIGE]
+    cols = [ACCENT, GREY, BEIGE]
 
     def vbar(col, fmt, suffix):
         fig = go.Figure(go.Bar(x=val.loc[order, col], y=order, orientation="h", marker=dict(color=cols, cornerradius=4),
@@ -367,21 +367,21 @@ def render(title, tabs, link, banner=""):
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="{PLOTLY_JS}"></script>
 <style>
-  body {{ margin: 0; background: #faf6f1; color: {INK}; font: 15px/1.5 {FONT}; }}
-  header {{ background: #fff; border-bottom: 1px solid #efe6dc; padding: 0 20px; display: flex; flex-wrap: wrap;
+  body {{ margin: 0; background: #f4f5f7; color: {INK}; font: 15px/1.5 {FONT}; }}
+  header {{ background: #fff; border-bottom: 1px solid #e1e4e8; padding: 0 20px; display: flex; flex-wrap: wrap;
            align-items: center; gap: 4px 24px; }}
   header h1 {{ font-size: 17px; font-weight: 600; margin: 14px 0; }}
   nav {{ display: flex; flex-wrap: wrap; }}
   nav button {{ font: 500 14px {FONT}; color: {GREY}; background: none; border: 0; padding: 14px 10px; cursor: pointer; }}
-  nav button.active {{ color: {INK}; box-shadow: inset 0 -2px 0 {ORANGE}; }}
+  nav button.active {{ color: {INK}; box-shadow: inset 0 -2px 0 {ACCENT}; }}
   header .links {{ margin-left: auto; font-size: 13px; display: flex; align-items: center; gap: 16px; }}
   header .links a {{ color: {GREY}; }}
   header .links svg {{ display: block; }}
-  .banner {{ background: #fff7ed; border-bottom: 1px solid #fed7aa; color: #9a3412; font-size: 14px; padding: 8px 20px; }}
+  .banner {{ background: #eef4fa; border-bottom: 1px solid #bcd3ea; color: #0d3a66; font-size: 14px; padding: 8px 20px; }}
   main {{ max-width: 1280px; margin: 0 auto; padding: 18px 16px 40px; }}
   section {{ display: none; }}
   section.active {{ display: block; }}
-  .card {{ background: #fff; border: 1px solid #efe6dc; border-radius: 16px; box-shadow: 0 4px 14px rgba(120,72,20,.06);
+  .card {{ background: #fff; border: 1px solid #e1e4e8; border-radius: 8px;
           padding: 14px 16px; margin-bottom: 16px; min-width: 0; }}
   .card-title {{ font-weight: 600; margin-bottom: 8px; }}
   .kpis {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }}
@@ -392,12 +392,12 @@ def render(title, tabs, link, banner=""):
   .grid2 {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }}
   @media (max-width: 900px) {{ .grid2 {{ grid-template-columns: 1fr; }} }}
   table {{ border-collapse: collapse; width: 100%; font-size: 14px; }}
-  th, td {{ text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid #f1ebe4; }}
+  th, td {{ text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid #eceef1; }}
   th {{ color: {GREY}; font-weight: 500; font-size: 13px; }}
   .n {{ text-align: right; font-variant-numeric: tabular-nums; }}
   p {{ color: #3b3f45; }}
   .note {{ color: {GREY}; font-size: 13px; max-width: 900px; margin-bottom: 0; }}
-  a {{ color: #c2410c; }}
+  a {{ color: #124d85; }}
   footer {{ color: {GREY}; font-size: 12px; text-align: center; padding-bottom: 24px; }}
 {METHOD_CSS}  .stale {{ position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; background: #fef2f2; color: #991b1b;
            border-top: 1px solid #fecaca; font-size: 14px; padding: 10px 20px; text-align: center; }}
@@ -452,7 +452,7 @@ facts = [("Model", "LightGBM (gradient-boosted trees), absolute-error loss, 1,20
                        "day-ahead forecast as the yardstick")]
 bars = go.Figure(go.Bar(x=[ro["ours"], ro["energinet_scaled"], ro["energinet"]],
                         y=["Ours", "Energinet, scaled", "Energinet, as published"], orientation="h",
-                        marker=dict(color=[ORANGE, GREY, BEIGE], cornerradius=4),
+                        marker=dict(color=[ACCENT, GREY, BEIGE], cornerradius=4),
                         text=[mw(v) for v in [ro["ours"], ro["energinet_scaled"], ro["energinet"]]],
                         textposition="outside", cliponaxis=False, hovertemplate="%{y}: %{x:,.0f} MW<extra></extra>"))
 bars.update_yaxes(autorange="reversed")
@@ -473,8 +473,8 @@ live_tabs["Method"] = (
 METHOD_CSS = """
   .flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
   @media (max-width: 900px) { .flow { grid-template-columns: 1fr; } }
-  .step { display: flex; gap: 10px; align-items: flex-start; background: #faf6f1; border-radius: 12px; padding: 10px; }
-  .step .num { flex: 0 0 26px; height: 26px; border-radius: 50%; background: #f97316; color: #fff; font-weight: 600;
+  .step { display: flex; gap: 10px; align-items: flex-start; background: #f4f5f7; border-radius: 12px; padding: 10px; }
+  .step .num { flex: 0 0 26px; height: 26px; border-radius: 50%; background: #1b66ad; color: #fff; font-weight: 600;
                display: grid; place-items: center; font-size: 13px; }
   .step .st { font-weight: 600; font-size: 14px; }
   .step .sb { color: #6b7280; font-size: 13px; line-height: 1.35; }

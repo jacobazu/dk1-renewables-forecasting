@@ -10,8 +10,8 @@ import pandas as pd
 
 ONSHORE = ["west_jutland", "north_jutland", "mid_jutland", "south_jutland", "east_jutland", "funen"]
 OFFSHORE = ["horns_rev", "thor", "anholt"]
-COLOR = {"onshore": "#2a78d6", "offshore": "#eb6834", "solar": "#1baf7a", "energinet": "#8a8984"}
-INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
+COLOR = {"onshore": "#c2522d", "offshore": "#1b66ad", "solar": "#2a9d8f", "energinet": "#7d8590"}
+INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e1e4e8"
 
 plt.rcParams.update({"font.size": 10, "axes.edgecolor": MUTED, "axes.labelcolor": MUTED, "xtick.color": MUTED,
                      "ytick.color": MUTED, "axes.spines.top": False, "axes.spines.right": False,
