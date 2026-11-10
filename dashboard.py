@@ -213,8 +213,8 @@ for t, name in TARGETS.items():
                       kpi("Fleet size used", mw(day["cap"].iloc[0]), "highest hour in the period before", GREY) +
                       "</div>")
         blocks.append(card(f"Forecast for {latest:%A %d %B}, made {made:%d %b %H:%M} (Danish time)", style(fig, 320),
-                           "Made before the noon day-ahead auction. Energinet's forecast is added when it is published, "
-                           "after the auction."))
+                           "LightGBM on ECMWF, ICON-EU and GFS weather, made before the noon auction. Energinet's forecast "
+                           "is added when it is published, after the auction. How it works: Method tab."))
     # track record: settled output where it is out (8-10 days late), real-time output until then
     done = pd.DataFrame()
     if prod is not None and len(lt):
@@ -359,7 +359,7 @@ def render(title, tabs, link, banner=""):
   .note {{ color: {GREY}; font-size: 13px; max-width: 900px; margin-bottom: 0; }}
   a {{ color: #c2410c; }}
   footer {{ color: {GREY}; font-size: 12px; text-align: center; padding-bottom: 24px; }}
-  .stale {{ position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; background: #fef2f2; color: #991b1b;
+{METHOD_CSS}  .stale {{ position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; background: #fef2f2; color: #991b1b;
            border-top: 1px solid #fecaca; font-size: 14px; padding: 10px 20px; text-align: center; }}
 </style>
 </head>
@@ -388,6 +388,57 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {{
 </script>
 </body>
 </html>
+"""
+
+
+# --- method tab: the pipeline as boxes, then the facts -----------------------------------------------------
+
+def step(n, title, body):
+    return (f"<div class='step'><div class='num'>{n}</div><div><div class='st'>{title}</div>"
+            f"<div class='sb'>{body}</div></div></div>")
+
+
+ro = fs.loc["offshore"]
+facts = [("Model", "LightGBM (gradient-boosted trees), absolute-error loss, 1,200 trees at learning rate 0.025"),
+         ("Target", "Offshore output as a share of the fleet, times the fleet size"),
+         ("Weather", "ECMWF's 00 UTC run from the morning before (ready about 07 UTC), plus ICON-EU and GFS. "
+                     "Wind at 100 m and 10 m, direction, gusts and the spread over the points"),
+         ("Points", "Horns Rev, Thor and Anholt at sea, plus six points over Jutland and Funen"),
+         ("Fleet size", "The highest hourly output in the 60 days before, so new parks such as Thor are picked up"),
+         ("Training", "All hours from March 2024 up to 10 days before the first of the month (settled output is "
+                      "8-10 days late). Refit monthly"),
+         ("Chosen on", "2025 only. Tested once on 2026, then frozen"),
+         ("Scored by", "Mean absolute error per hour against Energinet's settled output; Energinet's own "
+                       "day-ahead forecast as the yardstick")]
+bars = go.Figure(go.Bar(x=[ro["ours"], ro["energinet_scaled"], ro["energinet"]],
+                        y=["Ours", "Energinet, scaled", "Energinet, as published"], orientation="h",
+                        marker=dict(color=[ORANGE, GREY, BEIGE], cornerradius=4),
+                        text=[mw(v) for v in [ro["ours"], ro["energinet_scaled"], ro["energinet"]]],
+                        textposition="outside", cliponaxis=False, hovertemplate="%{y}: %{x:,.0f} MW<extra></extra>"))
+bars.update_yaxes(autorange="reversed")
+bars.update_xaxes(ticksuffix=" MW", range=[0, ro["energinet"] * 1.25])
+live_tabs["Method"] = (
+    "<div class='card'><div class='card-title'>How tomorrow's forecast is made, every morning</div><div class='flow'>" +
+    step(1, "07:00", "ECMWF's morning run is out") +
+    step(2, "10:07", "Weather at 9 points goes into the model") +
+    step(3, "Share × fleet", "The model gives output as a share of the fleet") +
+    step(4, "Saved", "Before the noon auction, never changed") +
+    step(5, "Scored", "Real-time output the next day, settled numbers 8-10 days later") +
+    "</div></div>" +
+    "<div class='grid2'>" +
+    card("The model", "<table class='facts'>" + "".join(f"<tr><th>{k}</th><td>{v}</td></tr>" for k, v in facts) + "</table>") +
+    card("Backtest 2026: error per hour", style(bars, 220),
+         "Lower is better. <a href='backtest.html'>Full backtest</a>.") +
+    "</div>")
+METHOD_CSS = """
+  .flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 900px) { .flow { grid-template-columns: 1fr; } }
+  .step { display: flex; gap: 10px; align-items: flex-start; background: #faf6f1; border-radius: 12px; padding: 10px; }
+  .step .num { flex: 0 0 26px; height: 26px; border-radius: 50%; background: #f97316; color: #fff; font-weight: 600;
+               display: grid; place-items: center; font-size: 13px; }
+  .step .st { font-weight: 600; font-size: 14px; }
+  .step .sb { color: #6b7280; font-size: 13px; line-height: 1.35; }
+  .facts th { width: 110px; vertical-align: top; }
 """
 
 
