@@ -1,0 +1,4 @@
+forecast,hours,eur_per_mw_year,eur_per_mwh,daily_sd,t_vs_ours
+Ours,6721,10474.364,2.508,140001.943,
+"Energinet, scaled to the fleet",6721,10256.135,2.456,150744.835,-0.118
+"Energinet, as published",6721,10748.762,2.574,263079.008,

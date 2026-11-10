@@ -143,6 +143,19 @@ def scores(f):
     return e("forecast"), e("energinet"), e("energinet_scaled")
 
 
+def error_bands(bt_f, live_f, cap):
+    """5/25/75/95% of the miss at each output level, from the 2026 backtest. hours with a similar forecast
+    (as a share of the fleet) are pooled: the miss is small near zero and full output, widest in between"""
+    share = (bt_f["forecast"] / bt_f["cap"]).clip(0, 1).to_numpy()
+    err = ((bt_f["actual"] - bt_f["forecast"]) / bt_f["cap"]).to_numpy()
+    out = []
+    for x in (live_f / cap).clip(0, 1):
+        near = np.abs(share - x) <= 0.1
+        q = np.quantile(err[near], [0.05, 0.25, 0.75, 0.95]) if near.sum() >= 50 else [np.nan] * 4
+        out.append(np.clip((x + np.array(q)) * cap, 0, cap))
+    return pd.DataFrame(out, index=live_f.index, columns=["q05", "q25", "q75", "q95"])
+
+
 def daily_chart(f):
     """mean absolute error per day; pale bars: scored on real-time output, settled numbers still to come"""
     d = f.assign(day=local(f.index).normalize().tz_localize(None))
@@ -177,6 +190,7 @@ def last_day_chart(f):
 
 # --- live page ---------------------------------------------------------------------------------------------
 
+bt_all = pd.read_csv("results/final_forecasts.csv", parse_dates=["time"]).set_index("time")
 log = pd.read_csv("forecasts/live_forecasts.csv", parse_dates=["date", "time"]) \
     if Path("forecasts/live_forecasts.csv").exists() else pd.DataFrame(columns=["date", "time", "target", "forecast"])
 prod = energinet = rt = None
@@ -201,9 +215,15 @@ for t, name in TARGETS.items():
             fig.add_trace(go.Scatter(x=local(day.index), y=energinet[t].reindex(day.index), name="Energinet, as published",
                                      line=dict(color=GREY, width=1.6, dash="dot", shape="hv"),
                                      hovertemplate="Energinet %{y:,.0f} MW<extra></extra>"))
+        b = error_bands(bt_all[bt_all["target"] == t], day["forecast"], day["cap"].iloc[0])
+        for lo, hi, a, nm in [("q05", "q95", .10, "9 in 10 hours inside"), ("q25", "q75", .20, "Half the hours inside")]:
+            fig.add_trace(go.Scatter(x=local(day.index), y=b[hi], line=dict(width=0, shape="hv"), showlegend=False,
+                                     hoverinfo="skip"))
+            fig.add_trace(go.Scatter(x=local(day.index), y=b[lo], line=dict(width=0, shape="hv"), fill="tonexty",
+                                     fillcolor=f"rgba(249,115,22,{a})", name=nm, hoverinfo="skip"))
         fig.add_trace(go.Scatter(x=local(day.index), y=day["forecast"], name="Ours", line=dict(color=ORANGE, width=2.5,
-                                 shape="hv"), fill="tozeroy", fillcolor="rgba(249,115,22,.08)",
-                                 hovertemplate="Ours %{y:,.0f} MW<extra></extra>"))
+                                 shape="hv"), customdata=b[["q05", "q95"]].to_numpy(),
+                                 hovertemplate="Ours %{y:,.0f} MW · 9 in 10: %{customdata[0]:,.0f}–%{customdata[1]:,.0f}<extra></extra>"))
         fig.update_yaxes(ticksuffix=" MW", rangemode="tozero")
         made = pd.Timestamp(day["issued"].iloc[0]).tz_localize("UTC").tz_convert("Europe/Copenhagen")
         blocks.append("<div class='kpis'>" +
@@ -303,6 +323,26 @@ TRIED = card("Also tried: onshore wind and solar",
              "published forecast but not significantly (p = 0.06), and behind it scaled to the fleet. Solar was "
              "behind both. Energinet knows every wind farm and solar plant and forecasts later, so only offshore, "
              "where its forecast misses part of the fleet, runs live.")
+if Path("results/value.csv").exists():
+    val = pd.read_csv("results/value.csv").set_index("forecast")
+    order = ["Ours", "Energinet, scaled to the fleet", "Energinet, as published"]
+    cols = [ORANGE, GREY, BEIGE]
+
+    def vbar(col, fmt, suffix):
+        fig = go.Figure(go.Bar(x=val.loc[order, col], y=order, orientation="h", marker=dict(color=cols, cornerradius=4),
+                               text=[fmt(v) for v in val.loc[order, col]], textposition="outside", cliponaxis=False,
+                               hovertemplate="%{y}: %{text}<extra></extra>"))
+        fig.update_yaxes(autorange="reversed")
+        fig.update_xaxes(range=[0, val[col].max() * 1.3], ticksuffix=suffix)
+        return style(fig, 200)
+
+    bt_tabs["Offshore wind"] += ("<div class='grid2'>" +
+        card("What the misses cost: imbalance bill per MWh produced", vbar("eur_per_mwh", lambda v: f"{v:.2f} €", " €"),
+             "A wind farm that sells its forecast day-ahead settles the miss at the imbalance price. The average bill "
+             "is about the same for all three: it depends on which way the grid leans, not on the size of the miss.") +
+        card("How much the bill swings from day to day", vbar("daily_sd", lambda v: f"{v / 1000:,.0f} k€", ""),
+             "Standard deviation of the daily bill for the whole fleet. A smaller miss means a steadier bill.") +
+        "</div>")
 bt_tabs["Offshore wind"] += TRIED
 live_tabs["Offshore wind"] += card("Why only offshore", "<p>Onshore wind and solar were tried with the same rules "
                                    "but didn't beat Energinet on 2026. See the <a href='backtest.html'>backtest</a>."
