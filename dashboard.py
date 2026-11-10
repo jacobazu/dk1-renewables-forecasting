@@ -64,7 +64,7 @@ def scaled(energinet, actual):
     return energinet * ratio.reindex(days).to_numpy()
 
 
-# --- charts shared by both pages ---------------------------------------------------------------------------
+# charts shared by both pages
 
 def trend_chart(f, window):
     """rolling mean absolute error by day: is the gap to energinet steady or changing"""
@@ -188,7 +188,7 @@ def last_day_chart(f):
     return style(fig, 280)
 
 
-# --- live page ---------------------------------------------------------------------------------------------
+# live page
 
 bt_all = pd.read_csv("results/final_forecasts.csv", parse_dates=["time"]).set_index("time")
 log = pd.read_csv("forecasts/live_forecasts.csv", parse_dates=["date", "time"]) \
@@ -223,7 +223,7 @@ for t, name in TARGETS.items():
                                      fillcolor=f"rgba(27,102,173,{a})", name=nm, hoverinfo="skip"))
         fig.add_trace(go.Scatter(x=local(day.index), y=day["forecast"], name="Ours", line=dict(color=ACCENT, width=2.5,
                                  shape="hv"), customdata=b[["q05", "q95"]].to_numpy(),
-                                 hovertemplate="Ours %{y:,.0f} MW · 9 in 10: %{customdata[0]:,.0f}–%{customdata[1]:,.0f}<extra></extra>"))
+                                 hovertemplate="Ours %{y:,.0f} MW · 9 in 10: %{customdata[0]:,.0f} to %{customdata[1]:,.0f}<extra></extra>"))
         fig.update_yaxes(ticksuffix=" MW", rangemode="tozero")
         made = pd.Timestamp(day["issued"].iloc[0]).tz_localize("UTC").tz_convert("Europe/Copenhagen")
         blocks.append("<div class='kpis'>" +
@@ -267,7 +267,7 @@ for t, name in TARGETS.items():
     live_tabs[name] = "".join(blocks)
 
 
-# --- backtest page: 2026, run once -------------------------------------------------------------------------
+# backtest page: 2026, run once
 
 bt = pd.read_csv("results/final_forecasts.csv", parse_dates=["time"]).set_index("time")
 fs = pd.read_csv("results/final_scores.csv").set_index("target")
@@ -349,7 +349,7 @@ live_tabs["Offshore wind"] += card("Why only offshore", "<p>Onshore wind and sol
                                    "</p>")
 
 
-# --- page ---------------------------------------------------------------------------------------------------
+# page
 
 def render(title, tabs, link, banner=""):
     built = datetime.now(timezone.utc)
@@ -431,7 +431,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {{
 """
 
 
-# --- method tab: the pipeline as boxes, then the facts -----------------------------------------------------
+# method tab: the pipeline as boxes, then the facts
 
 def step(n, title, body):
     return (f"<div class='step'><div class='num'>{n}</div><div><div class='st'>{title}</div>"
