@@ -51,6 +51,8 @@ except Exception as e:
 
 for table in ["production", "energinet", "production_rt"]:
     d = con.execute(f"SELECT * FROM {table} ORDER BY time").df()
+    if d.empty:
+        continue
     gaps = pd.date_range(d["time"].min(), d["time"].max(), freq="h").difference(d["time"])
     print(f"\n{table}: {d['time'].min()} to {d['time'].max()} utc, {len(d)} hours, {len(gaps)} missing")
     print(d.drop(columns="time").describe().round(0).to_string())
