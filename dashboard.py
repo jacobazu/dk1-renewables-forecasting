@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-ACCENT, GREEN, TEAL, RED = "#62d6e8", "#4fd08a", "#d45c88", "#ff7a7a"
-INK, GREY, LINE, GRID, BEIGE = "#e9f0f7", "#8fa6bd", "rgba(255,255,255,0.15)", "rgba(255,255,255,0.07)", "#4a6079"
+ACCENT, GREEN, TEAL, RED = "#c0800c", "#15803d", "#1c7fb0", "#b91c1c"
+INK, GREY, LINE, GRID, BEIGE = "#1c1917", "#78716c", "#e7e5e4", "#f0ece8", "#d6d3d1"
 FONT = "Instrument Sans, Segoe UI, Helvetica Neue, Arial, sans-serif"
 PLOTLY_JS = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@4.1.1/plotly.min.js"
 TARGETS = {"offshore": "Offshore wind"}
@@ -38,7 +38,7 @@ def style(fig, height, legend_y=-0.18):
         height=height, margin=dict(l=10, r=10, t=10, b=10), font=dict(family=FONT, color=GREY, size=12),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified",
         legend=dict(orientation="h", x=0, y=legend_y, font=dict(color=INK)),
-        hoverlabel=dict(bgcolor="#15324f", bordercolor="#2b4a6b", font=dict(color=INK, family=FONT)))
+        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#e7e5e4", font=dict(color=INK, family=FONT)))
     fig.update_xaxes(showgrid=False, zeroline=False, linecolor=LINE, color=GREY)
     fig.update_yaxes(gridcolor=GRID, zerolinecolor=BEIGE, color=GREY)
     return fig.to_html(full_html=False, include_plotlyjs=False, config=dict(displayModeBar=False, responsive=True))
@@ -220,7 +220,7 @@ for t, name in TARGETS.items():
             fig.add_trace(go.Scatter(x=local(day.index), y=b[hi], line=dict(width=0, shape="hv"), showlegend=False,
                                      hoverinfo="skip"))
             fig.add_trace(go.Scatter(x=local(day.index), y=b[lo], line=dict(width=0, shape="hv"), fill="tonexty",
-                                     fillcolor=f"rgba(98,214,232,{a})", name=nm, hoverinfo="skip"))
+                                     fillcolor=f"rgba(192,128,12,{a})", name=nm, hoverinfo="skip"))
         fig.add_trace(go.Scatter(x=local(day.index), y=day["forecast"], name="Ours", line=dict(color=ACCENT, width=2.5,
                                  shape="hv"), customdata=b[["q05", "q95"]].to_numpy(),
                                  hovertemplate="Ours %{y:,.0f} MW · 9 in 10: %{customdata[0]:,.0f} to %{customdata[1]:,.0f}<extra></extra>"))
@@ -367,24 +367,23 @@ def render(title, tabs, link, banner=""):
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="{PLOTLY_JS}"></script>
 <style>
-  html {{ background: #0a1626; }}
-  body {{ margin: 0; min-height: 100vh; color: {INK}; font: 15px/1.5 {FONT};
-         background: radial-gradient(1200px 700px at 70% 0%, #15324f 0%, #0c1c30 55%, #0a1626 100%) fixed; }}
-  header {{ padding: 10px 20px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; }}
+  html {{ background: #ffffff; }}
+  body {{ margin: 0; min-height: 100vh; color: {INK}; font: 15px/1.5 {FONT}; background: #ffffff; }}
+  header {{ padding: 8px 20px; border-bottom: 1px solid #ebe7e3; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; }}
   header h1 {{ font-size: 17px; font-weight: 600; margin: 10px 8px 10px 0; }}
   nav {{ display: flex; flex-wrap: wrap; gap: 2px; }}
   nav button {{ font: 500 14.5px {FONT}; color: {GREY}; background: none; border: 0; padding: 7px 15px; border-radius: 99px; cursor: pointer; }}
   nav button:hover {{ color: {INK}; }}
-  nav button.active {{ color: #0c1c30; background: {INK}; }}
+  nav button.active {{ color: #ffffff; background: {INK}; }}
   header .links {{ margin-left: auto; font-size: 14px; display: flex; align-items: center; gap: 16px; }}
   header .links a {{ color: {GREY}; text-decoration: none; }}
   header .links svg {{ display: block; fill: {INK}; }}
-  .banner {{ background: rgba(98,214,232,0.08); border: 1px solid rgba(98,214,232,0.25); color: #c9d6e2; font-size: 14px;
+  .banner {{ background: #fdf6e8; border: 1px solid #f0dcb4; color: #44403c; font-size: 14px;
             padding: 8px 16px; border-radius: 10px; max-width: 1248px; margin: 12px auto 0; }}
   main {{ max-width: 1280px; margin: 0 auto; padding: 18px 16px 40px; }}
   section {{ display: none; }}
   section.active {{ display: block; }}
-  .card {{ background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px;
+  .card {{ background: #ffffff; border: 1px solid #ebe7e3; border-radius: 14px;
           padding: 16px 20px; margin-bottom: 18px; min-width: 0; }}
   .card-title {{ font-weight: 500; margin-bottom: 8px; }}
   .kpis {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }}
@@ -395,15 +394,15 @@ def render(title, tabs, link, banner=""):
   .grid2 > * {{ min-width: 0; }}
   @media (max-width: 900px) {{ .grid2 {{ grid-template-columns: 1fr; }} header .links {{ margin-left: 0; }} }}
   table {{ border-collapse: collapse; width: 100%; font-size: 14px; }}
-  th, td {{ text-align: left; padding: 7px 8px 7px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }}
+  th, td {{ text-align: left; padding: 7px 8px 7px 0; border-bottom: 1px solid #ebe7e3; }}
   th {{ color: {GREY}; font-weight: 500; font-size: 13px; }}
   .n {{ text-align: right; font-variant-numeric: tabular-nums; }}
-  p {{ color: #c9d6e2; }}
+  p {{ color: #44403c; }}
   .note {{ color: {GREY}; font-size: 13px; max-width: 900px; margin-bottom: 0; }}
-  a {{ color: {ACCENT}; }}
+  a {{ color: #9a5b06; }}
   footer {{ color: {GREY}; font-size: 12px; text-align: center; padding-bottom: 24px; }}
-{METHOD_CSS}  .stale {{ position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; background: #3a1620; color: #ffb3b3;
-           border-top: 1px solid #6b2a35; font-size: 14px; padding: 10px 20px; text-align: center; }}
+{METHOD_CSS}  .stale {{ position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; background: #fef2f2; color: #991b1b;
+           border-top: 1px solid #fecaca; font-size: 14px; padding: 10px 20px; text-align: center; }}
 </style>
 </head>
 <body>
@@ -476,11 +475,11 @@ live_tabs["Method"] = (
 METHOD_CSS = """
   .flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
   @media (max-width: 900px) { .flow { grid-template-columns: 1fr; } }
-  .step { display: flex; gap: 10px; align-items: flex-start; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 10px; }
-  .step .num { flex: 0 0 26px; height: 26px; border-radius: 50%; background: #62d6e8; color: #0c1c30; font-weight: 600;
+  .step { display: flex; gap: 10px; align-items: flex-start; background: #faf8f6; border: 1px solid #ebe7e3; border-radius: 12px; padding: 10px; }
+  .step .num { flex: 0 0 26px; height: 26px; border-radius: 50%; background: #c0800c; color: #ffffff; font-weight: 600;
                display: grid; place-items: center; font-size: 13px; }
   .step .st { font-weight: 600; font-size: 14px; }
-  .step .sb { color: #8fa6bd; font-size: 13px; line-height: 1.35; }
+  .step .sb { color: #78716c; font-size: 13px; line-height: 1.35; }
   .facts th { width: 110px; vertical-align: top; }
 """
 
