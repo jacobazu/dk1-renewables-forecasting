@@ -1,0 +1,2 @@
+days,first,last,mae_ours,mae_no_wind_forecast,mae_energinet,bias_ours,capture_ratio_real,gain,dm_t,dm_p,ours_better
+258,2026-01-21,2026-10-10,13.075,15.52,14.426,6.121,1.077,2.444,2.237,0.025,True
