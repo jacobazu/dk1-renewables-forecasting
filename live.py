@@ -30,6 +30,9 @@ cfgs = json.loads(Path("results/improve_choice.json").read_text())
 # tomorrow's hours need ecmwf's run from today (00 utc). it is in the archive from about 07 utc
 test = im.X[im.X["date"] == tomorrow]
 if len(test) < 23 or test["ec_wind_land"].isna().sum() > 1 or test["wind_land"].isna().sum() > 1:
+    if now.hour < 9:   # a run before 09:00 (a late evening run, say) is just early: the morning runs make the forecast
+        print(f"{now:%H:%M}: too early for {tomorrow:%d %b}, today's weather run isn't out yet. no forecast, not an error")
+        sys.exit(0)
     sys.exit(f"weather for {tomorrow:%d %b} isn't complete yet ({len(test)} hours, "
              f"{test['ec_wind_land'].notna().sum()} with today's ecmwf run). try again later")
 
