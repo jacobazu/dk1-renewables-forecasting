@@ -66,6 +66,11 @@ jobs:
       - name: Forecast tomorrow
         run: python live.py
 
+      # tomorrow's capture price: our offshore forecast times the price forecast, saved before the auction
+      - name: Capture price
+        continue-on-error: true
+        run: python capture.py live
+
       - name: Dashboard
         run: python dashboard.py
 

@@ -344,6 +344,66 @@ if Path("results/value.csv").exists():
              "Standard deviation of the daily bill for the whole fleet. A smaller miss means a steadier bill.") +
         "</div>")
 bt_tabs["Offshore wind"] += TRIED
+# capture price: what an offshore farm earns per mwh in the day-ahead market. capture.py, rules in its header
+def capture_cards():
+    import capture as cp
+    live_html, bt_html = "", ""
+    cl = Path("forecasts/capture_live.csv")
+    if cl.exists():
+        c = pd.read_csv(cl)
+        nxt = c.iloc[-1]
+        real = []
+        try:
+            px = cp.price_file("live/prices_dk1_live.csv")
+            px["time"] = pd.to_datetime(px["time"], utc=True).dt.tz_localize(None)
+            px = px.set_index("time")["price"]
+            if prod is not None:
+                act = prod["offshore"].combine_first(rt["offshore"]) if rt is not None else prod["offshore"]
+                for _, r in c.iterrows():
+                    hrs = pd.date_range(pd.Timestamp(r["date"]).tz_localize("Europe/Copenhagen"), periods=24, freq="h").tz_convert("UTC").tz_localize(None)
+                    w, p_ = act.reindex(hrs), px.reindex(hrs)
+                    if w.notna().all() and p_.notna().all():
+                        real.append({"date": r["date"], "forecast": r["capture"], "real": cp.capture(w, p_), "day_avg": p_.mean()})
+        except Exception as e:
+            print("capture price scoring skipped:", e)
+        kp = ("<div class='kpis'>" +
+              kpi(f"Capture price, {pd.Timestamp(nxt['date']):%a %d %b}", f"{nxt['capture']:.0f} €", "per MWh offshore wind earns, forecast", ACCENT) +
+              kpi("Day average price", f"{nxt['day_avg']:.0f} €", "the price forecast", GREY) +
+              kpi("Ratio", f"{nxt['capture'] / nxt['day_avg']:.0%}", "of the day average", GREY) + "</div>")
+        if real:
+            rl = pd.DataFrame(real)
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=rl["date"], y=rl["real"], name="Real capture price", marker=dict(color=BEIGE, cornerradius=4),
+                                 hovertemplate="%{x}: real %{y:.0f} €<extra></extra>"))
+            fig.add_trace(go.Scatter(x=rl["date"], y=rl["forecast"], name="Forecast before the auction", mode="markers",
+                                     marker=dict(color=ACCENT, size=10, line=dict(color="#fff", width=1.5)),
+                                     hovertemplate="%{x}: forecast %{y:.0f} €<extra></extra>"))
+            fig.update_yaxes(ticksuffix=" €")
+            live_html = kp + card(f"Capture price each day, mean miss {(rl['forecast'] - rl['real']).abs().mean():.0f} € over {len(rl)} days",
+                                  style(fig, 280), "The day-ahead price weighted by what the offshore fleet produced. "
+                                  "Forecast: our offshore forecast times the price forecast, saved before the auction.")
+        else:
+            live_html = kp + card("Capture price", "<p class=note>Scored once the first forecast day is over.</p>")
+    tb = Path("results/capture_tests.csv")
+    if tb.exists():
+        t_ = pd.read_csv(tb).iloc[0]
+        bk = pd.read_csv("results/capture_backtest.csv")
+        names = ["Our wind forecast", "Energinet's wind forecast", "No wind forecast"]
+        vals = [t_["mae_ours"], t_["mae_energinet"], t_["mae_no_wind_forecast"]]
+        fig = go.Figure(go.Bar(x=vals, y=names, orientation="h", marker=dict(color=[ACCENT, GREY, BEIGE], cornerradius=4),
+                               text=[f"{v:.1f} €" for v in vals], textposition="outside", cliponaxis=False,
+                               hovertemplate="%{y}: %{x:.1f} €<extra></extra>"))
+        fig.update_yaxes(autorange="reversed"); fig.update_xaxes(range=[0, max(vals) * 1.3], ticksuffix=" €")
+        bt_html = card(f"Capture price: mean miss per day, {t_['first']} to {t_['last']}", style(fig, 200),
+                       f"All three use the same price forecast. Without a wind forecast: the price forecast's day average "
+                       f"times the last 30 days' capture ratio. Ours misses {t_['gain']:.1f} € a day less (Diebold-Mariano "
+                       f"p = {t_['dm_p']:.3f}). Energinet's forecast is published after the auction. Rules in capture.py.")
+    return live_html, bt_html
+
+
+cap_live, cap_bt = capture_cards()
+live_tabs["Offshore wind"] += cap_live
+bt_tabs["Offshore wind"] += cap_bt
 live_tabs["Offshore wind"] += card("Why only offshore", "<p>Onshore wind and solar were tried with the same rules "
                                    "but didn't beat Energinet on 2026. See the <a href='backtest.html'>backtest</a>."
                                    "</p>")

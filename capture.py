@@ -12,10 +12,14 @@ Rules, written before the backtest was run (12 Nov 2026):
   Newey-West (7 lags), p < 0.05.
 - Also shown, not tested: the same with Energinet's wind forecast in place of ours (published after the auction).
 
-    python capture.py      writes results/capture_backtest.csv and results/capture_tests.csv
+    python capture.py        writes results/capture_backtest.csv and results/capture_tests.csv
+    python capture.py live   tomorrow's capture price, saved before the auction to forecasts/capture_live.csv
 """
 import io
+import sys
 import urllib.request
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 import numpy as np
@@ -78,5 +82,33 @@ def main():
     print(tests.T.to_string())
 
 
+def live():
+    """tomorrow's capture price from the offshore forecast and the price forecast, saved once, before 12:00 danish
+    time the day before. never changed afterwards"""
+    now = datetime.now(ZoneInfo("Europe/Copenhagen"))
+    tomorrow = (pd.Timestamp(now.date()) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    out = Path("forecasts/capture_live.csv")
+    old = pd.read_csv(out) if out.exists() else pd.DataFrame(columns=["date"])
+    if tomorrow in set(old["date"].astype(str)):
+        print("capture price for", tomorrow, "already saved"); return
+    if now.hour >= 12:
+        print("after 12:00, the auction has closed: no capture price saved for", tomorrow); return
+    w = pd.read_csv("forecasts/live_forecasts.csv", parse_dates=["time"])
+    w = w[(w["target"] == "offshore") & (w["date"].astype(str) == tomorrow)].copy()
+    loc = w["time"].dt.tz_localize("UTC").dt.tz_convert("Europe/Copenhagen")
+    w["hour"] = loc.dt.hour
+    w = w[loc.dt.strftime("%Y-%m-%d") == tomorrow]
+    p = price_file("forecasts/forecasts_live.csv", local=Path("/nonexistent"))
+    p = p[p["date"].astype(str) == tomorrow].drop_duplicates(["date", "hour"], keep="last")
+    d = w[["hour", "forecast"]].merge(p[["hour", "ensemble", "forecast_made_utc"]], on="hour")
+    if len(d) != 24 or d[["forecast", "ensemble"]].isna().any().any():
+        print(f"not both forecasts for {tomorrow} yet ({len(d)} hours): nothing saved"); return
+    row = pd.DataFrame([{"made_utc": datetime.utcnow().strftime("%Y-%m-%d %H:%M"), "date": tomorrow,
+                         "capture": round(capture(d["forecast"], d["ensemble"]), 2),
+                         "day_avg": round(d["ensemble"].mean(), 2), "offshore_mwh": round(d["forecast"].clip(lower=0).sum(), 1)}])
+    pd.concat([old, row]).to_csv(out, index=False)
+    print("saved:", row.to_dict("records")[0])
+
+
 if __name__ == "__main__":
-    main()
+    live() if sys.argv[1:] == ["live"] else main()
