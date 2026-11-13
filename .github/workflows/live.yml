@@ -25,7 +25,10 @@ env:
   PYTHONUNBUFFERED: "1"
 
 jobs:
+  # a failed run sends no email: it runs many times a day and one flaky run (an apt mirror, a late data feed)
+  # is not a failure. the watchdog in dk1-price-forecasting checks the output and emails when it is missing
   forecast:
+    continue-on-error: true
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     steps:
@@ -96,6 +99,7 @@ jobs:
           path: docs
 
   deploy:
+    continue-on-error: true
     needs: forecast
     runs-on: ubuntu-24.04
     environment:
