@@ -8,6 +8,7 @@ on:
     - cron: "7 9 * * *"     # 10:07 danish winter time, 11:07 summer
     - cron: "37 9 * * *"    # second try if today's ecmwf run wasn't in the archive yet
     - cron: "7 17 * * *"    # evening refresh
+    - cron: "47 6-21 * * *" # every hour: today's real-time output on the dashboard
   workflow_dispatch:        # the outside scheduler (cron-job.org), or by hand
 
 permissions:

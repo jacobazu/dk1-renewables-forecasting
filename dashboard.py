@@ -188,6 +188,44 @@ def last_day_chart(f):
     return style(fig, 280)
 
 
+
+def today_card(name, lt, actual, bt_t):
+    """today, as it happens: the forecast made yesterday before the auction, its range, and what the fleet has produced
+    so far (energinet's real-time numbers). red: hours outside the 9-in-10 range"""
+    today = pd.Timestamp.now(tz="Europe/Copenhagen").normalize().tz_localize(None)
+    day = lt[lt["date"] == today]
+    if len(day) < 20:
+        return ""
+    b = error_bands(bt_t, day["forecast"], day["cap"].iloc[0])
+    a = actual.reindex(day.index)
+    seen = a.notna()
+    x = local(day.index)
+    fig = go.Figure()
+    for lo, hi, al, nm in [("q05", "q95", .10, "9 in 10 hours inside"), ("q25", "q75", .20, "Half the hours inside")]:
+        fig.add_trace(go.Scatter(x=x, y=b[hi], line=dict(width=0, shape="hv"), showlegend=False, hoverinfo="skip"))
+        fig.add_trace(go.Scatter(x=x, y=b[lo], line=dict(width=0, shape="hv"), fill="tonexty",
+                                 fillcolor=f"rgba(192,128,12,{al})", name=nm, hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=x, y=day["forecast"], name="Our forecast", line=dict(color=ACCENT, width=2.5, shape="hv"),
+                             hovertemplate="Forecast %{y:,.0f} MW<extra></extra>"))
+    out = seen & ((a < b["q05"]) | (a > b["q95"]))
+    if seen.any():
+        fig.add_trace(go.Scatter(x=x[seen.to_numpy()], y=a[seen], name="Produced", mode="lines+markers",
+                                 line=dict(color=INK, width=2), marker=dict(size=7, color=np.where(out[seen], RED, "#ffffff"),
+                                 line=dict(color=np.where(out[seen], RED, INK), width=1.8)),
+                                 hovertemplate="Produced %{y:,.0f} MW<extra></extra>"))
+    fig.update_yaxes(ticksuffix=" MW", rangemode="tozero")
+    n, k = int(seen.sum()), int((seen & ~out).sum())
+    made = pd.Timestamp(day["issued"].iloc[0]).tz_localize("UTC").tz_convert("Europe/Copenhagen")
+    if n:
+        sub = (f"<b>{k} of {n} hours</b> so far inside the 9-in-10 range. Produced {a[seen].sum():,.0f} MWh against "
+               f"{day['forecast'][seen].sum():,.0f} forecast for the same hours.")
+    else:
+        sub = "No real-time output yet today."
+    return card(f"Today, {today:%A %d %B}, as it happens", f"<p class=note style='margin:0 0 6px'>{sub}</p>" + style(fig, 300),
+                f"Forecast made {made:%d %b %H:%M}, before the auction. Produced: Energinet's real-time numbers, "
+                "updated every hour. Red: outside the range.")
+
+
 # live page
 
 bt_all = pd.read_csv("results/final_forecasts.csv", parse_dates=["time"]).set_index("time")
@@ -235,6 +273,9 @@ for t, name in TARGETS.items():
         blocks.append(card(f"Forecast for {latest:%A %d %B}, made {made:%d %b %H:%M} (Danish time)", style(fig, 320),
                            "LightGBM on ECMWF, ICON-EU and GFS weather, made before the noon auction. Energinet's forecast "
                            "is added when it is published, after the auction. How it works: Method tab."))
+    if prod is not None:
+        act_now = prod[t].combine_first(rt[t]) if rt is not None else prod[t]
+        blocks.append(today_card(name, lt, act_now, bt_all[bt_all["target"] == t]))
     # track record: settled output where it is out (8-10 days late), real-time output until then
     done = pd.DataFrame()
     if prod is not None and len(lt):
