@@ -56,7 +56,8 @@ January to 11 October 2026, mean absolute error in MW. Kept on 2025: ECMWF's fre
 
 Dashboard: [jacobazu.github.io/dk1-renewables-forecasting](https://jacobazu.github.io/dk1-renewables-forecasting/)
 
-- Offshore wind only. It is the one target that beat Energinet on 2026. Onshore and solar were tried with the same rules and didn't, so they don't run live, and the round-2 solar model isn't judged on live days after all.
+- Offshore wind is the product on the page. It is the one target that beat Energinet on 2026. Onshore and solar were tried with the same rules and didn't, and the round-2 solar model isn't judged on live days after all.
+- From 14 Nov 2026 onshore and solar run live too, with the models of the 2026 result (`results/improve_choice.json`), as inputs for other forecasts (the cable flows, and splitting the price forecast's misses). Energinet's forecast comes out after the auction, so before noon ours are the only ones there. They aren't shown or judged here.
 - Every morning before the noon auction, `live.py` forecasts tomorrow's offshore output with the model chosen above, refit on the first of each month on data up to 10 days before, as in the backtest.
 - Each day is forecast once and saved in `forecasts/live_forecasts.csv`, never changed. A day missed before noon stays a gap.
 - Scores come when Energinet's settled output does, 8-10 days later, against Energinet's forecast as published and scaled to the fleet.

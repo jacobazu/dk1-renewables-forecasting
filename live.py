@@ -1,5 +1,7 @@
-# tomorrow's dk1 offshore wind forecast, made before the noon auction with the model chosen in improve.py.
-# only offshore runs live: onshore and solar didn't beat energinet on 2026 (see the readme).
+# tomorrow's dk1 wind and solar forecasts, made before the noon auction with the models chosen in improve.py.
+# offshore is the product on the page. onshore and solar didn't beat energinet on 2026 (see the readme), but
+# energinet's forecast comes out after the auction, so ours are the only ones there before noon: they run too, as
+# inputs for the flow forecast and for splitting the price forecast's misses. a failure there never stops offshore
 # refit on all data up to 10 days before the first of the month, as in the backtest. each day is forecast
 # once and never changed; a missed day stays a gap
 #   python live.py
@@ -38,23 +40,28 @@ if len(test) < 23 or test["ec_wind_land"].isna().sum() > 1 or test["wind_land"].
 
 cutoff = tomorrow.replace(day=1) - pd.Timedelta(days=im.DELAY)
 rows = []
-for t in ["offshore"]:
-    cfg = cfgs[t]
-    cols = im.columns(cfg)
-    cap = im.fleet(im.prod[t], cfg.get("fleet_days", 60))
-    cap = cap.reindex(pd.date_range(cap.index.min(), tomorrow)).ffill()
-    d = im.X.join(im.prod[t].rename("actual"), how="inner")
-    d["cap"] = d["date"].map(cap)
-    d = d.dropna(subset=["actual", "cap", "wind_land"])
-    train = d[d["date"] <= cutoff]
-    m = lgb.LGBMRegressor(**{**im.PARAMS, **im.PARAM_TRIES.get(cfg["params"], {})})
-    m.fit(train[cols], train["actual"] / train["cap"])
-    c = cap[tomorrow]
-    rows.append(pd.DataFrame({"issued": now.tz_convert("UTC").strftime("%Y-%m-%d %H:%M"), "date": tomorrow,
-                              "time": test.index, "target": t,
-                              "forecast": np.clip(m.predict(test[cols]), 0, 1) * c, "cap": c}))
-    print(f"{t}: trained on {train['date'].min():%d %b %Y} to {train['date'].max():%d %b %Y}, fleet {c:,.0f} MW, "
-          f"tomorrow {rows[-1]['forecast'].mean():,.0f} MW on average")
+for t in ["offshore", "onshore", "solar"]:
+    try:
+        cfg = cfgs[t]
+        cols = im.columns(cfg)
+        cap = im.fleet(im.prod[t], cfg.get("fleet_days", 60))
+        cap = cap.reindex(pd.date_range(cap.index.min(), tomorrow)).ffill()
+        d = im.X.join(im.prod[t].rename("actual"), how="inner")
+        d["cap"] = d["date"].map(cap)
+        d = d.dropna(subset=["actual", "cap", "wind_land"])
+        train = d[d["date"] <= cutoff]
+        m = lgb.LGBMRegressor(**{**im.PARAMS, **im.PARAM_TRIES.get(cfg["params"], {})})
+        m.fit(train[cols], train["actual"] / train["cap"])
+        c = cap[tomorrow]
+        rows.append(pd.DataFrame({"issued": now.tz_convert("UTC").strftime("%Y-%m-%d %H:%M"), "date": tomorrow,
+                                  "time": test.index, "target": t,
+                                  "forecast": np.clip(m.predict(test[cols]), 0, 1) * c, "cap": c}))
+        print(f"{t}: trained on {train['date'].min():%d %b %Y} to {train['date'].max():%d %b %Y}, fleet {c:,.0f} MW, "
+              f"tomorrow {rows[-1]['forecast'].mean():,.0f} MW on average")
+    except Exception as e:
+        if t == "offshore":
+            raise
+        print(f"{t}: no forecast ({e}); offshore is saved anyway")
 
 new = pd.concat(rows)
 new["date"] = new["date"].dt.strftime("%Y-%m-%d")
