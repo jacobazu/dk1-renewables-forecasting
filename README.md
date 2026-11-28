@@ -45,6 +45,17 @@ January to 11 October 2026, mean absolute error in MW. Kept on 2025: ECMWF's fre
 - Onshore: lower than Energinet's published forecast but not significantly (p = 0.06), and 17% behind it scaled up. Energinet knows every wind farm and forecasts later.
 - Solar: behind. Most of the gap is in spring and summer. The fleet size (the highest hour in the last 60 days) follows the season for solar, not only new panels, so it lags in spring. A fleet measure over a whole year would suit solar better. That is for a later round, scored on new days.
 
+## Offshore against a fairer Energinet, checked 28 Nov 2026 (after the result)
+
+Energinet's forecast leaves out Thor (its dataset says so), and Thor came online in this period: the forecast is 100-500 MW below output in every month of 2026. Most of the lead above is that. Fixed with a straight line fitted on the 60 days up to 10 days before, the same data ours may use:
+
+| Offshore, Jan to 11 Oct 2026 | Error (MW) | Ours (170) better |
+|---|---|---|
+| Energinet day-ahead, straight-line fix | 180 | just, p = 0.05 |
+| Energinet 06:00 same day, straight-line fix | 159 | no |
+
+So ours is about 5% ahead of a fixed Energinet day-ahead forecast, at the edge of the test. Energinet's 06:00 forecast is better, but it comes about 20 hours after ours and after the auction.
+
 ## Round 2 for solar, set 22 Oct 2026 before trying
 
 2026 has been used, so it can't judge a new solar model. Instead:
